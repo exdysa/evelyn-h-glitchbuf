@@ -34,3 +34,4 @@ npm run build   # tsc → dist/glitchbuf.js (no bundler)
 1. Add method to `GlitchBuffer` in `main.ts`
 2. Add to `IGlitchBuffer` in `glitchsp.ts`
 3. Add to `makeGlitchEnv`: `env.set('name', (...) => buf.val.name(...))`
+4. Update `README.md`

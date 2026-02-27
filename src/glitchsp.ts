@@ -1,3 +1,5 @@
+/// <reference path="effects.ts" />
+
 // ── PRNG ───────────────────────────────────────────────────────────────────
 // Mulberry32 — fast, good quality, fully seedable 32-bit PRNG.
 
@@ -13,16 +15,7 @@ function mulberry32(seed: number): () => number {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface IGlitchBuffer {
-  bitcrush(bits: number): this;
-  noise(amount: number): this;
-  reverse(): this;
-  echo(times: number, gainDb: number): this;
-  select(startPct: number, endPct: number, fn: (sub: IGlitchBuffer) => void): this;
-  copy(srcStart: number, srcEnd: number, dstStart: number): this;
-}
-
-type GlitchFn = (...args: GlitchVal[]) => GlitchVal;
+type GlitchFn = (...args: GlitchVal[]) => GlitchVal | Promise<GlitchVal>;
 type GlitchVal = number | string | boolean | null | GlitchVal[] | IGlitchBuffer | GlitchFn;
 type BufCell = { val: IGlitchBuffer };
 
@@ -126,7 +119,7 @@ class GlitchEnv {
 
 // ── Evaluator ──────────────────────────────────────────────────────────────
 
-function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
+async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<GlitchVal> {
   if (typeof expr === 'number' || typeof expr === 'boolean' || expr === null) return expr;
   if (typeof expr === 'function') return expr;
   if (typeof expr === 'string') return env.get(expr);
@@ -142,7 +135,7 @@ function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
     const bindings = rest[0] as GlitchVal[];
     const inner = new GlitchEnv(env);
     for (let i = 0; i < bindings.length; i += 2)
-      inner.set(bindings[i] as string, evaluate(bindings[i + 1], env, buf));
+      inner.set(bindings[i] as string, await evaluate(bindings[i + 1], env, buf));
     return evaluate(rest[1], inner, buf);
   }
 
@@ -151,7 +144,7 @@ function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
     const params = rest[0] as string[];
     const body = rest[1];
     const closure = env;
-    return (...args: GlitchVal[]): GlitchVal => {
+    return (...args: GlitchVal[]): Promise<GlitchVal> => {
       const inner = new GlitchEnv(closure);
       params.forEach((p, i) => inner.set(p, args[i]));
       return evaluate(body, inner, buf);
@@ -160,13 +153,13 @@ function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
 
   if (head === 'select') {
     // (select startPct endPct body) — body evaluated lazily with buf.val = sub
-    const start = evaluate(rest[0], env, buf) as number;
-    const end = evaluate(rest[1], env, buf) as number;
+    const start = await evaluate(rest[0], env, buf) as number;
+    const end = await evaluate(rest[1], env, buf) as number;
     const body = rest[2];
     const saved = buf.val;
-    buf.val.select(start, end, sub => {
+    await buf.val.select(start, end, async (sub) => {
       buf.val = sub as IGlitchBuffer;
-      evaluate(body, env, buf);
+      await evaluate(body, env, buf);
     });
     buf.val = saved;
     return buf.val;
@@ -175,22 +168,22 @@ function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
   if (head === 'do') {
     // (do form ...) — evaluate in sequence, return last
     let result: GlitchVal = null;
-    for (const form of rest) result = evaluate(form, env, buf);
+    for (const form of rest) result = await evaluate(form, env, buf);
     return result;
   }
 
   if (head === 'if') {
     // (if cond then else?) — else is optional
-    const cond = evaluate(rest[0], env, buf);
+    const cond = await evaluate(rest[0], env, buf);
     if (cond) return evaluate(rest[1], env, buf);
     return rest[2] !== undefined ? evaluate(rest[2], env, buf) : null;
   }
 
   // ── function application ─────────────────────────────────────────────────
 
-  const fn = evaluate(head, env, buf) as GlitchFn;
-  const args = rest.map(a => evaluate(a, env, buf));
-  return fn(...args);
+  const fn = await evaluate(head, env, buf) as GlitchFn;
+  const args = await Promise.all(rest.map(a => evaluate(a, env, buf)));
+  return await fn(...args);
 }
 
 // ── Built-ins ──────────────────────────────────────────────────────────────
@@ -200,6 +193,7 @@ function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
 function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   const env = new GlitchEnv();
 
+  env.set('reverb', (t: GlitchVal, w: GlitchVal): Promise<GlitchVal> => buf.val.reverb(t as number, w as number));
   env.set('bitcrush', (bits: GlitchVal): GlitchVal => buf.val.bitcrush(bits as number));
   env.set('noise', (amt: GlitchVal): GlitchVal => buf.val.noise(amt as number));
   env.set('reverse', (): GlitchVal => buf.val.reverse());
@@ -236,8 +230,8 @@ function tryParse(code: string): boolean {
   try { parseAll(code); return true; } catch { return false; }
 }
 
-function runGlitchsp(code: string, image: IGlitchBuffer, rand: () => number): void {
+async function runGlitchsp(code: string, image: IGlitchBuffer, rand: () => number): Promise<void> {
   const buf: BufCell = { val: image };
   const env = makeGlitchEnv(buf, rand);
-  for (const expr of parseAll(code)) evaluate(expr, env, buf);
+  for (const expr of parseAll(code)) await evaluate(expr, env, buf);
 }

@@ -1,92 +1,5 @@
 /// <reference path="glitchsp.ts" />
 
-function rgbaToGlitch(data: Uint8ClampedArray, width: number, height: number): Uint8Array {
-  const buf = new Uint8Array(width * height * 3);
-  for (let i = 0; i < width * height; i++) {
-    buf[i * 3] = data[i * 4];     // R
-    buf[i * 3 + 1] = data[i * 4 + 1]; // G
-    buf[i * 3 + 2] = data[i * 4 + 2]; // B
-  }
-  return buf;
-}
-
-function glitchToRgba(buf: Uint8Array, width: number, height: number): Uint8ClampedArray<ArrayBuffer> {
-  const out = new Uint8ClampedArray(new ArrayBuffer(width * height * 4));
-  for (let i = 0; i < width * height; i++) {
-    out[i * 4] = buf[i * 3];     // R
-    out[i * 4 + 1] = buf[i * 3 + 1]; // G
-    out[i * 4 + 2] = buf[i * 3 + 2]; // B
-    out[i * 4 + 3] = 255;
-  }
-  return out;
-}
-
-class GlitchBuffer {
-  data: Uint8Array;
-  private rand: () => number;
-
-  constructor(data: Uint8Array, rand: () => number = Math.random) {
-    this.data = data;
-    this.rand = rand;
-  }
-
-  select(startPct: number, endPct: number, fn: (sub: GlitchBuffer) => void): this {
-    const len = this.data.length;
-    const start = Math.floor(startPct * len);
-    const end = Math.floor(endPct * len);
-    // subarray() is a zero-copy view — writes go directly into the parent buffer.
-    const sub = new GlitchBuffer(this.data.subarray(start, end), this.rand);
-    fn(sub);
-    return this;
-  }
-
-  reverse(): this {
-    this.data.reverse();
-    return this;
-  }
-
-  copy(srcStart: number, srcEnd: number, dstStart: number): this {
-    const len = this.data.length;
-    const src = Math.floor(srcStart * len);
-    const srcE = Math.floor(srcEnd * len);
-    const dst = Math.floor(dstStart * len);
-    const chunk = this.data.slice(src, srcE);
-    this.data.set(chunk.subarray(0, Math.min(chunk.length, len - dst)), dst);
-    return this;
-  }
-
-  bitcrush(bits: number): this {
-    // step is always a power of 2, so masking beats float division/multiply.
-    const mask = 0xFF & ~((1 << (8 - bits)) - 1);
-    for (let i = 0; i < this.data.length; i++) {
-      this.data[i] = this.data[i] & mask;
-    }
-    return this;
-  }
-
-  noise(db: number): this {
-    const amplitude = 255 * Math.pow(10, db / 20);
-    for (let i = 0; i < this.data.length; i++) {
-      const val = this.data[i] + ((this.rand() * 2 - 1) + (this.rand() * 2 - 1)) * 0.5 * amplitude;
-      const r = (val + 0.5) | 0;
-      this.data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
-    }
-    return this;
-  }
-
-  echo(delayPct: number, gainDb: number): this {
-    const len = this.data.length;
-    const delay = Math.floor(delayPct * len);
-    const gain = Math.pow(10, gainDb / 20);
-    for (let i = 0; i < len - delay; i++) {
-      const val = this.data[i + delay] + gain * this.data[i];
-      const r = (val + 0.5) | 0;
-      this.data[i + delay] = r < 0 ? 0 : r > 255 ? 255 : r;
-    }
-    return this;
-  }
-}
-
 let originalBuffer: Uint8Array | null = null;
 let imgWidth = 0;
 let imgHeight = 0;
@@ -118,13 +31,13 @@ function showError(msg: string, immediate: boolean): void {
   }
 }
 
-function runImage(immediate = false): void {
+async function runImage(immediate = false): Promise<void> {
   if (!originalBuffer) return;
   try {
     const seed = parseInt(seedInput.value, 10) >>> 0;
     const rand = mulberry32(seed);
     const image = new GlitchBuffer(originalBuffer.slice(), rand);
-    runGlitchsp(codeArea.value, image, rand);
+    await runGlitchsp(codeArea.value, image, rand);
     const rgba = glitchToRgba(image.data, imgWidth, imgHeight);
     ctx.putImageData(new ImageData(rgba, imgWidth, imgHeight), 0, 0);
     if (errorTimer !== null) { clearTimeout(errorTimer); errorTimer = null; }
