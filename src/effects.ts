@@ -3,11 +3,14 @@ declare const Tone: any;
 // ── Interface ───────────────────────────────────────────────────────────────
 
 interface IGlitchBuffer {
+  width: number;
+  height: number;
   bitcrush(bits: number): this;
   noise(amount: number): this;
   reverse(): this;
   echo(times: number, gainDb: number): this;
   reverb(timePct: number, wet: number): Promise<this>;
+  rescale(newWidth: number, newHeight: number): Promise<this>;
   select(startPct: number, endPct: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   copy(srcStart: number, srcEnd: number, dstStart: number): this;
 }
@@ -39,10 +42,14 @@ function glitchToRgba(buf: Uint8Array, width: number, height: number): Uint8Clam
 
 class GlitchBuffer implements IGlitchBuffer {
   data: Uint8Array;
+  width: number;
+  height: number;
   private rand: () => number;
 
-  constructor(data: Uint8Array, rand: () => number = Math.random) {
+  constructor(data: Uint8Array, width: number, height: number, rand: () => number = Math.random) {
     this.data = data;
+    this.width = width;
+    this.height = height;
     this.rand = rand;
   }
 
@@ -51,8 +58,24 @@ class GlitchBuffer implements IGlitchBuffer {
     const start = Math.floor(startPct * len);
     const end = Math.floor(endPct * len);
     // subarray() is a zero-copy view — writes go directly into the parent buffer.
-    const sub = new GlitchBuffer(this.data.subarray(start, end), this.rand);
+    // width/height aren't meaningful for a 1D slice; rescale inside select is unsupported.
+    const sub = new GlitchBuffer(this.data.subarray(start, end), 0, 0, this.rand);
     await fn(sub);
+    return this;
+  }
+
+  async rescale(newWidth: number, newHeight: number): Promise<this> {
+    const src = new OffscreenCanvas(this.width, this.height);
+    src.getContext('2d')!.putImageData(
+      new ImageData(glitchToRgba(this.data, this.width, this.height), this.width, this.height), 0, 0);
+
+    const dst = new OffscreenCanvas(newWidth, newHeight);
+    dst.getContext('2d')!.drawImage(src, 0, 0, newWidth, newHeight);
+
+    const dstData = dst.getContext('2d')!.getImageData(0, 0, newWidth, newHeight);
+    this.data = rgbaToGlitch(dstData.data, newWidth, newHeight);
+    this.width = newWidth;
+    this.height = newHeight;
     return this;
   }
 

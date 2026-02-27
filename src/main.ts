@@ -38,10 +38,12 @@ async function runImage(immediate = false): Promise<void> {
   try {
     const seed = parseInt(seedInput.value, 10) >>> 0;
     const rand = mulberry32(seed);
-    const image = new GlitchBuffer(originalBuffer.slice(), rand);
+    const image = new GlitchBuffer(originalBuffer.slice(), imgWidth, imgHeight, rand);
     await runGlitchsp(codeArea.value, image, rand);
-    const rgba = glitchToRgba(image.data, imgWidth, imgHeight);
-    ctx.putImageData(new ImageData(rgba, imgWidth, imgHeight), 0, 0);
+    const rgba = glitchToRgba(image.data, image.width, image.height);
+    canvas.width = image.width;
+    canvas.height = image.height;
+    ctx.putImageData(new ImageData(rgba, image.width, image.height), 0, 0);
     if (errorTimer !== null) { clearTimeout(errorTimer); errorTimer = null; }
     errorPre.textContent = '';
   } catch (e) {

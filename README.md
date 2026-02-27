@@ -28,6 +28,7 @@ bitcrush n          # quantise to 2^n discrete levels  (n = 1–8)
 noise db            # add gaussian noise               (e.g. -30 = subtle, -6 = heavy)
 echo delay gain     # single echo at delay fraction    (delay = 0–1, gain in dB)
 reverb time wet     # convolve with decaying noise IR  (time = 0–1, wet = 0–1)
+rescale w h         # resize image to w×h pixels
 reverse             # reverse the byte stream
 copy s e dst        # copy slice [s,e) to dst          (all fractions 0–1)
 select s e body     # run body on sub-slice [s,e)
