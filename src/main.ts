@@ -34,9 +34,9 @@ class GlitchBuffer {
     const len = this.data.length;
     const start = Math.floor(startPct * len);
     const end = Math.floor(endPct * len);
-    const sub = new GlitchBuffer(this.data.slice(start, end), this.rand);
+    // subarray() is a zero-copy view — writes go directly into the parent buffer.
+    const sub = new GlitchBuffer(this.data.subarray(start, end), this.rand);
     fn(sub);
-    this.data.set(sub.data, start);
     return this;
   }
 
@@ -56,9 +56,10 @@ class GlitchBuffer {
   }
 
   bitcrush(bits: number): this {
-    const step = Math.pow(2, 8 - bits);
+    // step is always a power of 2, so masking beats float division/multiply.
+    const mask = 0xFF & ~((1 << (8 - bits)) - 1);
     for (let i = 0; i < this.data.length; i++) {
-      this.data[i] = Math.floor(this.data[i] / step) * step;
+      this.data[i] = this.data[i] & mask;
     }
     return this;
   }
@@ -66,8 +67,9 @@ class GlitchBuffer {
   noise(db: number): this {
     const amplitude = 255 * Math.pow(10, db / 20);
     for (let i = 0; i < this.data.length; i++) {
-      const val = this.data[i] + (this.rand() * 2 - 1) * amplitude;
-      this.data[i] = Math.max(0, Math.min(255, Math.round(val)));
+      const val = this.data[i] + ((this.rand() * 2 - 1) + (this.rand() * 2 - 1)) * 0.5 * amplitude;
+      const r = (val + 0.5) | 0;
+      this.data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
     }
     return this;
   }
@@ -78,7 +80,8 @@ class GlitchBuffer {
     const gain = Math.pow(10, gainDb / 20);
     for (let i = 0; i < len - delay; i++) {
       const val = this.data[i + delay] + gain * this.data[i];
-      this.data[i + delay] = Math.max(0, Math.min(255, Math.round(val)));
+      const r = (val + 0.5) | 0;
+      this.data[i + delay] = r < 0 ? 0 : r > 255 ? 255 : r;
     }
     return this;
   }
