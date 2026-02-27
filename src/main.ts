@@ -13,6 +13,7 @@ const newSeedBtn = document.getElementById('new-seed') as HTMLButtonElement;
 const errorPre = document.getElementById('error') as HTMLPreElement;
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
+const loadingEl = document.getElementById('loading') as HTMLDivElement;
 
 function randomSeed(): number {
   return Math.floor(Math.random() * 0x100000000);
@@ -33,6 +34,7 @@ function showError(msg: string, immediate: boolean): void {
 
 async function runImage(immediate = false): Promise<void> {
   if (!originalBuffer) return;
+  loadingEl.classList.add('visible');
   try {
     const seed = parseInt(seedInput.value, 10) >>> 0;
     const rand = mulberry32(seed);
@@ -45,6 +47,8 @@ async function runImage(immediate = false): Promise<void> {
   } catch (e) {
     showError(String(e), immediate);
     // canvas intentionally left unchanged
+  } finally {
+    loadingEl.classList.remove('visible');
   }
 }
 
