@@ -26,6 +26,16 @@ body {
   display: flex;
   gap: 8px;
 }
+.seed-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.seed-row input {
+  flex: 1;
+  font-family: monospace;
+  font-size: 13px;
+}
 #error {
   color: red;
   margin: 0;

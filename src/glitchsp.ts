@@ -1,3 +1,16 @@
+// ── PRNG ───────────────────────────────────────────────────────────────────
+// Mulberry32 — fast, good quality, fully seedable 32-bit PRNG.
+
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface IGlitchBuffer {
@@ -6,11 +19,12 @@ interface IGlitchBuffer {
   reverse(): this;
   echo(times: number, gainDb: number): this;
   select(startPct: number, endPct: number, fn: (sub: IGlitchBuffer) => void): this;
+  copy(srcStart: number, srcEnd: number, dstStart: number): this;
 }
 
-type GlitchFn  = (...args: GlitchVal[]) => GlitchVal;
+type GlitchFn = (...args: GlitchVal[]) => GlitchVal;
 type GlitchVal = number | string | boolean | null | GlitchVal[] | IGlitchBuffer | GlitchFn;
-type BufCell   = { val: IGlitchBuffer };
+type BufCell = { val: IGlitchBuffer };
 
 // ── Tokenizer ──────────────────────────────────────────────────────────────
 
@@ -44,9 +58,9 @@ function parseExpr(tokens: string[]): GlitchVal {
 }
 
 function parseAtom(token: string): GlitchVal {
-  if (token === 'true')  return true;
+  if (token === 'true') return true;
   if (token === 'false') return false;
-  if (token === 'null')  return null;
+  if (token === 'null') return null;
   if (token.startsWith('"') && token.endsWith('"')) return token.slice(1, -1);
   const n = Number(token);
   if (token !== '' && !isNaN(n)) return n;
@@ -97,7 +111,7 @@ function parseAll(src: string): GlitchVal[] {
 
 class GlitchEnv {
   private map = new Map<string, GlitchVal>();
-  constructor(private parent?: GlitchEnv) {}
+  constructor(private parent?: GlitchEnv) { }
 
   get(name: string): GlitchVal {
     if (this.map.has(name)) return this.map.get(name)!;
@@ -147,8 +161,8 @@ function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
   if (head === 'select') {
     // (select startPct endPct body) — body evaluated lazily with buf.val = sub
     const start = evaluate(rest[0], env, buf) as number;
-    const end   = evaluate(rest[1], env, buf) as number;
-    const body  = rest[2];
+    const end = evaluate(rest[1], env, buf) as number;
+    const body = rest[2];
     const saved = buf.val;
     buf.val.select(start, end, sub => {
       buf.val = sub as IGlitchBuffer;
@@ -183,42 +197,47 @@ function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): GlitchVal {
 // Buffer ops close over `buf` — they never take a buffer argument.
 // select is a special form above, not a function.
 
-function makeGlitchEnv(buf: BufCell): GlitchEnv {
+function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   const env = new GlitchEnv();
 
   env.set('bitcrush', (bits: GlitchVal): GlitchVal => buf.val.bitcrush(bits as number));
-  env.set('noise',    (amt:  GlitchVal): GlitchVal => buf.val.noise(amt as number));
-  env.set('reverse',  ():               GlitchVal => buf.val.reverse());
-  env.set('echo',     (t: GlitchVal, g: GlitchVal): GlitchVal => buf.val.echo(t as number, g as number));
+  env.set('noise', (amt: GlitchVal): GlitchVal => buf.val.noise(amt as number));
+  env.set('reverse', (): GlitchVal => buf.val.reverse());
+  env.set('echo', (t: GlitchVal, g: GlitchVal): GlitchVal => buf.val.echo(t as number, g as number));
+  env.set('copy', (s: GlitchVal, e: GlitchVal, t: GlitchVal): GlitchVal => buf.val.copy(s as number, e as number, t as number));
 
   // arithmetic
-  env.set('+',   (a: GlitchVal, b: GlitchVal) => (a as number) + (b as number));
-  env.set('-',   (a: GlitchVal, b: GlitchVal) => (a as number) - (b as number));
-  env.set('*',   (a: GlitchVal, b: GlitchVal) => (a as number) * (b as number));
-  env.set('/',   (a: GlitchVal, b: GlitchVal) => (a as number) / (b as number));
+  env.set('+', (a: GlitchVal, b: GlitchVal) => (a as number) + (b as number));
+  env.set('-', (a: GlitchVal, b: GlitchVal) => (a as number) - (b as number));
+  env.set('*', (a: GlitchVal, b: GlitchVal) => (a as number) * (b as number));
+  env.set('/', (a: GlitchVal, b: GlitchVal) => (a as number) / (b as number));
   env.set('mod', (a: GlitchVal, b: GlitchVal) => (a as number) % (b as number));
   env.set('clamp', (v: GlitchVal, lo: GlitchVal, hi: GlitchVal) =>
     Math.min(Math.max(v as number, lo as number), hi as number));
 
   // comparison & logic
-  env.set('<',   (a: GlitchVal, b: GlitchVal) => (a as number) <  (b as number));
-  env.set('>',   (a: GlitchVal, b: GlitchVal) => (a as number) >  (b as number));
-  env.set('<=',  (a: GlitchVal, b: GlitchVal) => (a as number) <= (b as number));
-  env.set('>=',  (a: GlitchVal, b: GlitchVal) => (a as number) >= (b as number));
-  env.set('=',   (a: GlitchVal, b: GlitchVal) => a === b);
+  env.set('<', (a: GlitchVal, b: GlitchVal) => (a as number) < (b as number));
+  env.set('>', (a: GlitchVal, b: GlitchVal) => (a as number) > (b as number));
+  env.set('<=', (a: GlitchVal, b: GlitchVal) => (a as number) <= (b as number));
+  env.set('>=', (a: GlitchVal, b: GlitchVal) => (a as number) >= (b as number));
+  env.set('=', (a: GlitchVal, b: GlitchVal) => a === b);
   env.set('not', (a: GlitchVal): GlitchVal => !a);
 
-  // random
+  // random — uses seeded PRNG
   env.set('rand', (...args: GlitchVal[]): GlitchVal =>
-    args.length > 0 ? Math.random() * (args[0] as number) : Math.random());
+    args.length > 0 ? rand() * (args[0] as number) : rand());
 
   return env;
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────
 
-function runGlitchsp(code: string, image: IGlitchBuffer): void {
+function tryParse(code: string): boolean {
+  try { parseAll(code); return true; } catch { return false; }
+}
+
+function runGlitchsp(code: string, image: IGlitchBuffer, rand: () => number): void {
   const buf: BufCell = { val: image };
-  const env = makeGlitchEnv(buf);
+  const env = makeGlitchEnv(buf, rand);
   for (const expr of parseAll(code)) evaluate(expr, env, buf);
 }

@@ -8,9 +8,14 @@
 <body>
   <div id="controls">
     <input type="file" id="file" accept="image/*">
-    <textarea id="code" spellcheck="false">select 0.2 0.3 (echo 3 -6)
+    <div class="seed-row">
+      <label for="seed">Seed</label>
+      <input type="text" id="seed" spellcheck="false">
+      <button id="new-seed">New</button>
+    </div>
+    <textarea id="code" spellcheck="false">select 0.2 0.3 (echo 0.25 -6)
 bitcrush 4
-noise 5</textarea>
+noise -30</textarea>
     <div class="buttons">
       <button id="run">Run</button>
       <button id="download">Download PNG</button>
