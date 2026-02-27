@@ -64,6 +64,32 @@ codeArea.addEventListener('input', () => {
   }, 300);
 });
 
+codeArea.addEventListener('keydown', (e: KeyboardEvent) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+    e.preventDefault();
+    const val = codeArea.value;
+    const selStart = codeArea.selectionStart;
+    const selEnd = codeArea.selectionEnd;
+
+    // Expand to full lines
+    const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
+    let adjustedEnd = selEnd;
+    if (selEnd > selStart && val[selEnd - 1] === '\n') adjustedEnd--;
+    const nextNl = val.indexOf('\n', adjustedEnd);
+    const lineEnd = nextNl === -1 ? val.length : nextNl;
+
+    const lines = val.slice(lineStart, lineEnd).split('\n');
+    const allCommented = lines.every(l => /^#/.test(l));
+    const newLines = lines.map(l => allCommented ? l.replace(/^#\s?/, '') : '# ' + l);
+    const newBlock = newLines.join('\n');
+
+    codeArea.value = val.slice(0, lineStart) + newBlock + val.slice(lineEnd);
+    codeArea.selectionStart = selStart;
+    codeArea.selectionEnd = selEnd + (newBlock.length - (lineEnd - lineStart));
+    codeArea.dispatchEvent(new Event('input'));
+  }
+});
+
 newSeedBtn.addEventListener('click', () => {
   seedInput.value = String(randomSeed());
   runImage();

@@ -13,6 +13,9 @@ interface IGlitchBuffer {
   rescale(newWidth: number, newHeight: number): Promise<this>;
   select(startPct: number, endPct: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   copy(srcStart: number, srcEnd: number, dstStart: number): this;
+  tremolo(rate: number, depth: number): this;
+  distortion(drive: number): this;
+  chorus(rate: number, depth: number, wet: number): this;
 }
 
 // ── Image conversion ────────────────────────────────────────────────────────
@@ -176,6 +179,47 @@ class GlitchBuffer implements IGlitchBuffer {
       const val = this.data[i + delay] + gain * this.data[i];
       const r = (val + 0.5) | 0;
       this.data[i + delay] = r < 0 ? 0 : r > 255 ? 255 : r;
+    }
+    return this;
+  }
+
+  // Sinusoidal amplitude modulation. rate = oscillation count across buffer.
+  // depth 0–1: how deeply the LFO dips (0 = silent, 1 = full tremolo).
+  tremolo(rate: number, depth: number): this {
+    const len = this.data.length;
+    for (let i = 0; i < len; i++) {
+      const lfo = 1 - depth * 0.5 * (1 - Math.sin(2 * Math.PI * rate * i / len));
+      const val = (this.data[i] - 127.5) * lfo + 127.5;
+      const r = (val + 0.5) | 0;
+      this.data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
+    }
+    return this;
+  }
+
+  // Soft-clip via tanh. drive > 1 saturates; ~1 = clean, ~10 = heavy crunch.
+  distortion(drive: number): this {
+    for (let i = 0; i < this.data.length; i++) {
+      const x = this.data[i] / 127.5 - 1;
+      const val = (Math.tanh(x * drive) + 1) * 127.5;
+      const r = (val + 0.5) | 0;
+      this.data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
+    }
+    return this;
+  }
+
+  // Mix original with an LFO-time-shifted copy. rate = LFO oscillations,
+  // depth = modulation width as fraction of buffer, wet = 0–1 mix.
+  chorus(rate: number, depth: number, wet: number): this {
+    const len = this.data.length;
+    const orig = this.data.slice();
+    const halfDepth = Math.floor(depth * len * 0.5);
+    for (let i = 0; i < len; i++) {
+      const offset = Math.round(halfDepth * Math.sin(2 * Math.PI * rate * i / len));
+      const j = i + offset;
+      const sample = (j >= 0 && j < len) ? orig[j] : orig[i];
+      const val = orig[i] * (1 - wet) + sample * wet;
+      const r = (val + 0.5) | 0;
+      this.data[i] = r < 0 ? 0 : r > 255 ? 255 : r;
     }
     return this;
   }

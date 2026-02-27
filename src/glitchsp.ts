@@ -200,6 +200,9 @@ function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   env.set('reverse', (): GlitchVal => buf.val.reverse());
   env.set('echo', (t: GlitchVal, g: GlitchVal): GlitchVal => buf.val.echo(t as number, g as number));
   env.set('copy', (s: GlitchVal, e: GlitchVal, t: GlitchVal): GlitchVal => buf.val.copy(s as number, e as number, t as number));
+  env.set('tremolo', (r: GlitchVal, d: GlitchVal): GlitchVal => buf.val.tremolo(r as number, d as number));
+  env.set('distortion', (d: GlitchVal): GlitchVal => buf.val.distortion(d as number));
+  env.set('chorus', (r: GlitchVal, d: GlitchVal, w: GlitchVal): GlitchVal => buf.val.chorus(r as number, d as number, w as number));
 
   // arithmetic
   env.set('+', (a: GlitchVal, b: GlitchVal) => (a as number) + (b as number));
