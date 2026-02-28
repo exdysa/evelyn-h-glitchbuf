@@ -8,18 +8,18 @@ interface IGlitchBuffer {
   bitcrush(bits: number): this;
   noise(amount: number): this;
   reverse(): this;
-  echo(times: number, gainDb: number): this;
-  reverb(timePct: number, wet: number): Promise<this>;
+  echo(delay: number, gainDb: number): this;          // delay   0–100
+  reverb(time: number, wet: number): Promise<this>;   // time    0–100
   rescale(newWidth: number, newHeight: number): Promise<this>;
-  select(startPct: number, endPct: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
-  copy(srcStart: number, srcEnd: number, dstStart: number): this;
+  select(start: number, end: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>; // 0–100
+  copy(srcStart: number, srcEnd: number, dstStart: number): this;  // 0–100
   tremolo(rate: number, depth: number): this;
   distort(drive: number): this;
   chorus(rate: number, depth: number, wet: number): this;
   pitchShift(semitones: number): Promise<this>;
   invert(): this;
-  shuffle(pct: number): this;
-  transpose(ch: number, dx: number, dy: number): this;
+  shuffle(amount: number): this;                      // amount  0–100
+  transpose(ch: number, dx: number, dy: number): this; // dx/dy  0–100
   quantize(levels: number): this;
   fold(drive: number): this;
   solarize(threshold: number): this;
@@ -50,6 +50,11 @@ function glitchToRgba(buf: Uint8Array, width: number, height: number): Uint8Clam
   return out;
 }
 
+// Convert a 0–100 percentage to an integer index within a buffer of given length.
+function pct(p: number, len: number): number {
+  return Math.floor(p / 100 * len);
+}
+
 // ── GlitchBuffer ────────────────────────────────────────────────────────────
 
 class GlitchBuffer implements IGlitchBuffer {
@@ -65,13 +70,11 @@ class GlitchBuffer implements IGlitchBuffer {
     this.rand = rand;
   }
 
-  async select(startPct: number, endPct: number, fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
+  async select(start: number, end: number, fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
     const len = this.data.length;
-    const start = Math.floor(startPct * len);
-    const end = Math.floor(endPct * len);
     // subarray() is a zero-copy view — writes go directly into the parent buffer.
     // width/height aren't meaningful for a 1D slice; rescale inside select is unsupported.
-    const sub = new GlitchBuffer(this.data.subarray(start, end), 0, 0, this.rand);
+    const sub = new GlitchBuffer(this.data.subarray(pct(start, len), pct(end, len)), 0, 0, this.rand);
     await fn(sub);
     return this;
   }
@@ -91,11 +94,10 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  async reverb(timePct: number, wet: number): Promise<this> {
+  async reverb(time: number, wet: number): Promise<this> {
     const sampleRate = 44100;
     const len = this.data.length;
-    // timePct is a fraction of the buffer length, same convention as other time params.
-    const irLen = Math.max(1, Math.floor(timePct * len));
+    const irLen = Math.max(1, pct(time, len));
 
     // Convert bytes [0, 255] → floats [-1, 1]
     const samples = new Float32Array(len);
@@ -153,9 +155,9 @@ class GlitchBuffer implements IGlitchBuffer {
 
   copy(srcStart: number, srcEnd: number, dstStart: number): this {
     const len = this.data.length;
-    const src = Math.floor(srcStart * len);
-    const srcE = Math.floor(srcEnd * len);
-    const dst = Math.floor(dstStart * len);
+    const src = pct(srcStart, len);
+    const srcE = pct(srcEnd, len);
+    const dst = pct(dstStart, len);
     const chunk = this.data.slice(src, srcE);
     this.data.set(chunk.subarray(0, Math.min(chunk.length, len - dst)), dst);
     return this;
@@ -180,20 +182,20 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  echo(delayPct: number, gainDb: number): this {
+  echo(delay: number, gainDb: number): this {
     const len = this.data.length;
-    const delay = Math.floor(delayPct * len);
+    const d = pct(delay, len);
     const gain = Math.pow(10, gainDb / 20);
-    for (let i = 0; i < len - delay; i++) {
-      const val = this.data[i + delay] + gain * this.data[i];
+    for (let i = 0; i < len - d; i++) {
+      const val = this.data[i + d] + gain * this.data[i];
       const r = (val + 0.5) | 0;
-      this.data[i + delay] = r < 0 ? 0 : r > 255 ? 255 : r;
+      this.data[i + d] = r < 0 ? 0 : r > 255 ? 255 : r;
     }
     return this;
   }
 
   // Sinusoidal amplitude modulation. rate = oscillation count across buffer.
-  // depth 0–1: how deeply the LFO dips (0 = silent, 1 = full tremolo).
+  // depth 0–1: how deeply the LFO dips (0 = no effect, 1 = full tremolo).
   tremolo(rate: number, depth: number): this {
     const len = this.data.length;
     for (let i = 0; i < len; i++) {
@@ -236,12 +238,12 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  // Shift one RGB channel by (dx, dy) as fractions of width/height. Wraps toroidally.
+  // Shift one RGB channel by (dx, dy) as 0–100 percentages of width/height. Wraps toroidally.
   transpose(ch: number, dx: number, dy: number): this {
     const { width, height } = this;
     if (!width || !height) return this;
-    const offX = Math.round(dx * width);
-    const offY = Math.round(dy * height);
+    const offX = Math.round(dx / 100 * width);
+    const offY = Math.round(dy / 100 * height);
     const orig = this.data.slice();
     for (let srcY = 0; srcY < height; srcY++) {
       const py = ((srcY + offY) % height + height) % height;
@@ -253,10 +255,10 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  // pct: fraction of total pixels to swap (0–1). Swaps whole pixels (3 bytes each).
-  shuffle(pct: number): this {
+  // amount: 0–100 percentage of total pixels to swap. Swaps whole RGB pixels.
+  shuffle(amount: number): this {
     const pixels = Math.floor(this.data.length / 3);
-    const swaps = Math.floor(pct * pixels);
+    const swaps = pct(amount, pixels);
     for (let i = 0; i < swaps; i++) {
       const a = Math.floor(this.rand() * pixels) * 3;
       const b = Math.floor(this.rand() * pixels) * 3;
@@ -281,9 +283,8 @@ class GlitchBuffer implements IGlitchBuffer {
   // drive ≤ 0.5 = passthrough, ~1 = one full fold, higher = multiple folds.
   fold(drive: number): this {
     for (let i = 0; i < this.data.length; i++) {
-      let v = (this.data[i] / 255) * drive; // scale up
-      // triangle wave fold: fold into [0, 1] repeatedly
-      v = v - Math.floor(v); // fractional part
+      let v = (this.data[i] / 255) * drive;
+      v = v - Math.floor(v); // fractional part → triangle wave fold
       if (v > 0.5) v = 1 - v;
       this.data[i] = Math.round(v * 2 * 255);
     }

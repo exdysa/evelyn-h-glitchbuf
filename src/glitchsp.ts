@@ -187,15 +187,15 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
   }
 
   if (head === 'stride') {
-    // (stride len skip body) — apply body to chunks of len, skipping skip chunks between each
-    const chunkLen = await evaluate(rest[0], env, buf) as number;
-    const skip = Math.floor(await evaluate(rest[1], env, buf) as number);
+    // (stride len skip body) — apply body to chunks of len (0–100), skipping skip chunks between each
+    const chunkLen = Math.max(0.1, await evaluate(rest[0], env, buf) as number);
+    const skip = Math.max(0, Math.floor(await evaluate(rest[1], env, buf) as number));
     const body = rest[2];
     const top = buf.val;
     const step = chunkLen * (skip + 1);
-    for (let pos = 0; pos < 1; pos += step) {
+    for (let pos = 0; pos < 100; pos += step) {
       buf.val = top;
-      await top.select(pos, Math.min(pos + chunkLen, 1), async (sub) => {
+      await top.select(pos, Math.min(pos + chunkLen, 100), async (sub) => {
         buf.val = sub as IGlitchBuffer;
         await evaluate(body, env, buf);
       });
