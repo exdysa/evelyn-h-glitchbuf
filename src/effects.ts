@@ -23,7 +23,7 @@ interface IGlitchBuffer {
 function rgbaToGlitch(data: Uint8ClampedArray, width: number, height: number): Uint8Array {
   const buf = new Uint8Array(width * height * 3);
   for (let i = 0; i < width * height; i++) {
-    buf[i * 3]     = data[i * 4];     // R
+    buf[i * 3] = data[i * 4];     // R
     buf[i * 3 + 1] = data[i * 4 + 1]; // G
     buf[i * 3 + 2] = data[i * 4 + 2]; // B
   }
@@ -33,7 +33,7 @@ function rgbaToGlitch(data: Uint8ClampedArray, width: number, height: number): U
 function glitchToRgba(buf: Uint8Array, width: number, height: number): Uint8ClampedArray<ArrayBuffer> {
   const out = new Uint8ClampedArray(new ArrayBuffer(width * height * 4));
   for (let i = 0; i < width * height; i++) {
-    out[i * 4]     = buf[i * 3];     // R
+    out[i * 4] = buf[i * 3];     // R
     out[i * 4 + 1] = buf[i * 3 + 1]; // G
     out[i * 4 + 2] = buf[i * 3 + 2]; // B
     out[i * 4 + 3] = 255;
@@ -212,7 +212,7 @@ class GlitchBuffer implements IGlitchBuffer {
   chorus(rate: number, depth: number, wet: number): this {
     const len = this.data.length;
     const orig = this.data.slice();
-    const halfDepth = Math.floor(depth * len * 0.5);
+    const halfDepth = Math.floor(depth * len * 0.0001);
     for (let i = 0; i < len; i++) {
       const offset = Math.round(halfDepth * Math.sin(2 * Math.PI * rate * i / len));
       const j = i + offset;
