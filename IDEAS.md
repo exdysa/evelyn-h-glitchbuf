@@ -23,7 +23,6 @@
   - put seed and script in the url to be shareable
     - don't push so history isn't polluted with every keystroke
     - however, _do_ push old state when loading a preset so they can go back to the old state even if it wasn't saved
-  - preset scripts
   - script in PNG metadata?
     - neat but potentially a security issue
   - better error handling in the parsing

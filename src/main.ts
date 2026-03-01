@@ -178,6 +178,8 @@ let lastLoadedCode = codeArea.value;
 let currentSelectValue = '';
 
 buildPresetSelect(presetsSelect);
+currentSelectValue = presetsSelect.value;
+deletePresetBtn.disabled = !presetsSelect.value.startsWith('user:');
 
 presetsSelect.addEventListener('change', async () => {
   const val = presetsSelect.value;

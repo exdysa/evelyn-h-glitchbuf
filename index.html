@@ -1,11 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="in-browser image glitch editor <3">
+  <meta name="theme-color" content="#1e1e1e">
+  <meta property="og:title" content="glitchbuf">
+  <meta property="og:description" content="in-browser image glitch editor <3">
+  <meta property="og:type" content="website">
   <title>glitchbuf</title>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231e1e1e'/><rect x='2' y='2' width='2' height='2' fill='red'/><rect x='4' y='2' width='2' height='2' fill='yellow'/><rect x='6' y='2' width='4' height='2' fill='white'/><rect x='10' y='2' width='2' height='2' fill='cyan'/><rect x='12' y='2' width='2' height='2' fill='blue'/><rect x='5' y='4' width='2' height='3' fill='red'/><rect x='7' y='4' width='2' height='3' fill='yellow'/><rect x='9' y='4' width='4' height='3' fill='white'/><rect x='13' y='4' width='2' height='3' fill='cyan'/><rect x='15' y='4' width='2' height='3' fill='blue'/><rect x='1' y='7' width='2' height='2' fill='yellow'/><rect x='3' y='7' width='4' height='2' fill='white'/><rect x='7' y='7' width='2' height='2' fill='cyan'/><rect x='9' y='7' width='2' height='2' fill='blue'/><rect x='3' y='9' width='2' height='2' fill='red'/><rect x='5' y='9' width='2' height='2' fill='yellow'/><rect x='7' y='9' width='4' height='2' fill='white'/><rect x='11' y='9' width='2' height='2' fill='cyan'/><rect x='13' y='9' width='2' height='2' fill='blue'/><rect x='2' y='11' width='2' height='3' fill='red'/><rect x='4' y='11' width='2' height='3' fill='yellow'/><rect x='6' y='11' width='4' height='3' fill='white'/><rect x='10' y='11' width='2' height='3' fill='cyan'/><rect x='12' y='11' width='2' height='3' fill='blue'/></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div id="controls">
     <div class="file-seed-row">
@@ -16,18 +25,20 @@
       <div class="field seed-row">
         <label for="seed">seed</label>
         <input type="text" id="seed" spellcheck="false">
-        <button id="new-seed">randomise</button>
+        <button id="new-seed" type="button">randomise</button>
       </div>
     </div>
     <div class="field presets-row">
-      <label>presets</label>
-      <select id="presets"><option value="">— select preset —</option></select>
-      <button id="save-preset">save</button>
-      <button id="delete-preset" disabled>delete</button>
+      <label for="presets">presets</label>
+      <select id="presets">
+        <option value="">— select preset —</option>
+      </select>
+      <button id="save-preset" type="button">save</button>
+      <button id="delete-preset" type="button" disabled>delete</button>
     </div>
     <div id="canvas-pane">
       <div id="no-image">no image loaded</div>
-      <div id="loading">rendering…</div>
+      <div id="loading" role="status" aria-live="polite">rendering…</div>
       <div id="canvas-wrap">
         <span id="preview-label">preview</span>
         <canvas id="canvas"></canvas>
@@ -39,20 +50,21 @@
 noise -24</textarea>
     </div>
     <div class="buttons">
-      <button id="run">run</button>
-      <button id="download">download png</button>
+      <button id="run" type="button">run</button>
+      <button id="download" type="button">download png</button>
     </div>
-    <pre id="error"></pre>
+    <pre id="error" role="alert"></pre>
   </div>
-  <dialog id="modal">
+  <dialog id="modal" aria-labelledby="modal-msg" aria-modal="true">
     <p id="modal-msg"></p>
     <input id="modal-input" type="text" spellcheck="false" hidden>
     <div class="modal-buttons">
-      <button id="modal-ok">ok</button>
-      <button id="modal-cancel">cancel</button>
+      <button id="modal-ok" type="button">ok</button>
+      <button id="modal-cancel" type="button">cancel</button>
     </div>
   </dialog>
   <script src="https://unpkg.com/tone/build/Tone.js"></script>
   <script src="dist/glitchbuf.js"></script>
 </body>
+
 </html>
