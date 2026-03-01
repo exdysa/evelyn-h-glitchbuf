@@ -153,8 +153,8 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 
   if (head === 'select') {
     // (select startPct endPct body) — body evaluated lazily with buf.val = sub
-    const start = await evaluate(rest[0], env, buf) as number;
-    const end = await evaluate(rest[1], env, buf) as number;
+    const start = await evaluate(rest[0], env, buf) as Percentage;
+    const end = await evaluate(rest[1], env, buf) as Percentage;
     const body = rest[2];
     const saved = buf.val;
     await buf.val.select(start, end, async (sub) => {
@@ -195,7 +195,7 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
     const step = chunkLen * (skip + 1);
     for (let pos = 0; pos < 100; pos += step) {
       buf.val = top;
-      await top.select(pos, Math.min(pos + chunkLen, 100), async (sub) => {
+      await top.select(pos as Percentage, Math.min(pos + chunkLen, 100) as Percentage, async (sub) => {
         buf.val = sub as IGlitchBuffer;
         await evaluate(body, env, buf);
       });
@@ -206,7 +206,7 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 
   if (head === 'mix') {
     // (mix wet body) — evaluate body, blend result with pre-body snapshot at wet ratio
-    const wet = await evaluate(rest[0], env, buf) as number;
+    const wet = await evaluate(rest[0], env, buf) as Wet;
     const body = rest[1];
     await buf.val.mix(wet, async () => { await evaluate(body, env, buf); });
     return buf.val;
@@ -240,22 +240,22 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   const env = new GlitchEnv();
 
-  env.set('reverb', (t: GlitchVal, w: GlitchVal): Promise<GlitchVal> => buf.val.reverb(t as number, w as number));
+  env.set('reverb', (t: GlitchVal, w: GlitchVal): Promise<GlitchVal> => buf.val.reverb(t as Percentage, w as Wet));
   env.set('rescale', (w: GlitchVal, h: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number));
   // alt name for rescale
   env.set('resize', (w: GlitchVal, h: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number));
   env.set('bitcrush', (bits: GlitchVal): GlitchVal => buf.val.bitcrush(bits as number));
-  env.set('noise', (amt: GlitchVal): GlitchVal => buf.val.noise(amt as number));
+  env.set('noise', (amt: GlitchVal): GlitchVal => buf.val.noise(amt as Decibels));
   env.set('reverse', (): GlitchVal => buf.val.reverse());
-  env.set('echo', (t: GlitchVal, g: GlitchVal): GlitchVal => buf.val.echo(t as number, g as number));
-  env.set('copy', (s: GlitchVal, e: GlitchVal, t: GlitchVal): GlitchVal => buf.val.copy(s as number, e as number, t as number));
+  env.set('echo', (t: GlitchVal, g: GlitchVal): GlitchVal => buf.val.echo(t as Percentage, g as Decibels));
+  env.set('copy', (s: GlitchVal, e: GlitchVal, t: GlitchVal): GlitchVal => buf.val.copy(s as Percentage, e as Percentage, t as Percentage));
   env.set('tremolo', (r: GlitchVal, d: GlitchVal): GlitchVal => buf.val.tremolo(r as number, d as number));
   env.set('distort', (d: GlitchVal): GlitchVal => buf.val.distort(d as number));
-  env.set('chorus', (r: GlitchVal, d: GlitchVal, w: GlitchVal): GlitchVal => buf.val.chorus(r as number, d as number, w as number));
+  env.set('chorus', (r: GlitchVal, d: GlitchVal, w: GlitchVal): GlitchVal => buf.val.chorus(r as number, d as Percentage, w as Wet));
   env.set('pitchshift', (s: GlitchVal): Promise<GlitchVal> => buf.val.pitchShift(s as number));
-  env.set('transpose', (ch: GlitchVal, dx: GlitchVal, dy: GlitchVal): GlitchVal => buf.val.transpose(ch as number, dx as number, dy as number));
+  env.set('transpose', (ch: GlitchVal, dx: GlitchVal, dy: GlitchVal): GlitchVal => buf.val.transpose(ch as number, dx as Percentage, dy as Percentage));
   env.set('invert', (): GlitchVal => buf.val.invert());
-  env.set('shuffle', (pct: GlitchVal): GlitchVal => buf.val.shuffle(pct as number));
+  env.set('shuffle', (pct: GlitchVal): GlitchVal => buf.val.shuffle(pct as Percentage));
   env.set('quantize', (n: GlitchVal): GlitchVal => buf.val.quantize(n as number));
   env.set('fold', (d: GlitchVal): GlitchVal => buf.val.fold(d as number));
   env.set('solarize', (t: GlitchVal): GlitchVal => buf.val.solarize(t as number));

@@ -1,30 +1,41 @@
 declare const Tone: any;
 
+// ── Newtypes for numeric types ────────────────────────────────────────────────────
+
+declare const _pct: unique symbol;
+type Percentage = number & { readonly [_pct]: void };  // 0–100, fraction of buffer length/dimensions
+
+declare const _db: unique symbol;
+type Decibels = number & { readonly [_db]: void };     // amplitude on dB scale
+
+declare const _wet: unique symbol;
+type Wet = number & { readonly [_wet]: void };         // 0–1 linear mix ratio
+
 // ── Interface ───────────────────────────────────────────────────────────────
 
 interface IGlitchBuffer {
   width: number;
   height: number;
   bitcrush(bits: number): this;
-  noise(amount: number): this;
+  noise(amount: Decibels): this;
   reverse(): this;
-  echo(delay: number, gainDb: number): this;          // delay   0–100
-  reverb(time: number, wet: number): Promise<this>;   // time    0–100
+  echo(delay: Percentage, gainDb: Decibels): this;
+  reverb(time: Percentage, wet: Wet): Promise<this>;
   rescale(newWidth: number, newHeight: number): Promise<this>;
-  select(start: number, end: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>; // 0–100
-  copy(srcStart: number, srcEnd: number, dstStart: number): this;  // 0–100
+  select(start: Percentage, end: Percentage, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
+  copy(srcStart: Percentage, srcEnd: Percentage, dstStart: Percentage): this;
   tremolo(rate: number, depth: number): this;
   distort(drive: number): this;
-  chorus(rate: number, depth: number, wet: number): this;
+  chorus(rate: number, depth: Percentage, wet: Wet): this;
   pitchShift(semitones: number): Promise<this>;
   invert(): this;
-  shuffle(amount: number): this;                      // amount  0–100
-  transpose(ch: number, dx: number, dy: number): this; // dx/dy  0–100
+  shuffle(amount: Percentage): this;
+  transpose(ch: number, dx: Percentage, dy: Percentage): this;
   quantize(levels: number): this;
   fold(drive: number): this;
   solarize(threshold: number): this;
   channel(ch: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
-  mix(wet: number, fn: (buf: IGlitchBuffer) => Promise<void>): Promise<this>;
+  mix(wet: Wet, fn: (buf: IGlitchBuffer) => Promise<void>): Promise<this>;
 }
 
 // ── Image conversion ────────────────────────────────────────────────────────
@@ -70,7 +81,7 @@ class GlitchBuffer implements IGlitchBuffer {
     this.rand = rand;
   }
 
-  async select(start: number, end: number, fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
+  async select(start: Percentage, end: Percentage, fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
     const len = this.data.length;
     // subarray() is a zero-copy view — writes go directly into the parent buffer.
     // width/height aren't meaningful for a 1D slice; rescale inside select is unsupported.
@@ -94,7 +105,7 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  async reverb(time: number, wet: number): Promise<this> {
+  async reverb(time: Percentage, wet: Wet): Promise<this> {
     const sampleRate = 44100;
     const len = this.data.length;
     const irLen = Math.max(1, pct(time, len));
@@ -153,7 +164,7 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  copy(srcStart: number, srcEnd: number, dstStart: number): this {
+  copy(srcStart: Percentage, srcEnd: Percentage, dstStart: Percentage): this {
     const len = this.data.length;
     const src = pct(srcStart, len);
     const srcE = pct(srcEnd, len);
@@ -172,7 +183,7 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  noise(db: number): this {
+  noise(db: Decibels): this {
     const amplitude = 255 * Math.pow(10, db / 20);
     for (let i = 0; i < this.data.length; i++) {
       const val = this.data[i] + ((this.rand() * 2 - 1) + (this.rand() * 2 - 1)) * 0.5 * amplitude;
@@ -182,7 +193,7 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  echo(delay: number, gainDb: number): this {
+  echo(delay: Percentage, gainDb: Decibels): this {
     const len = this.data.length;
     const d = pct(delay, len);
     const gain = Math.pow(10, gainDb / 20);
@@ -218,7 +229,7 @@ class GlitchBuffer implements IGlitchBuffer {
 
   // Mix original with an LFO-time-shifted copy. rate = LFO oscillations,
   // depth = modulation width as fraction of buffer, wet = 0–1 mix.
-  chorus(rate: number, depth: number, wet: number): this {
+  chorus(rate: number, depth: Percentage, wet: Wet): this {
     const len = this.data.length;
     const orig = this.data.slice();
     const halfDepth = Math.floor(depth * len * 0.0001);
@@ -239,7 +250,7 @@ class GlitchBuffer implements IGlitchBuffer {
   }
 
   // Shift one RGB channel by (dx, dy) as 0–100 percentages of width/height. Wraps toroidally.
-  transpose(ch: number, dx: number, dy: number): this {
+  transpose(ch: number, dx: Percentage, dy: Percentage): this {
     const { width, height } = this;
     if (!width || !height) return this;
     const offX = Math.round(dx / 100 * width);
@@ -256,7 +267,7 @@ class GlitchBuffer implements IGlitchBuffer {
   }
 
   // amount: 0–100 percentage of total pixels to swap. Swaps whole RGB pixels.
-  shuffle(amount: number): this {
+  shuffle(amount: Percentage): this {
     const pixels = Math.floor(this.data.length / 3);
     const swaps = pct(amount, pixels);
     for (let i = 0; i < swaps; i++) {
@@ -313,7 +324,7 @@ class GlitchBuffer implements IGlitchBuffer {
   }
 
   // Snapshot → evaluate fn → blend result back at wet ratio.
-  async mix(wet: number, fn: (buf: GlitchBuffer) => Promise<void>): Promise<this> {
+  async mix(wet: Wet, fn: (buf: GlitchBuffer) => Promise<void>): Promise<this> {
     const snapshot = this.data.slice();
     await fn(this);
     const len = Math.min(snapshot.length, this.data.length);
