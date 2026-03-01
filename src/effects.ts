@@ -20,7 +20,7 @@ interface IGlitchBuffer {
   noise(amount: Decibels): this;
   reverse(): this;
   echo(delay: Percentage, gainDb: Decibels): this;
-  reverb(time: Percentage, wet: Wet): Promise<this>;
+  reverb(roomSize: number, dampening: number, wet: Wet): Promise<this>;
   rescale(newWidth: number, newHeight: number): Promise<this>;
   select(start: Percentage, end: Percentage, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   copy(srcStart: Percentage, srcEnd: Percentage, dstStart: Percentage): this;
@@ -105,50 +105,25 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  async reverb(time: Percentage, wet: Wet): Promise<this> {
+  async reverb(roomSize: number, dampening: number, wet: Wet): Promise<this> {
     const sampleRate = 44100;
     const len = this.data.length;
-    const irLen = Math.max(1, pct(time, len));
+    const duration = len / sampleRate;
 
-    // Convert bytes [0, 255] → floats [-1, 1]
     const samples = new Float32Array(len);
     for (let i = 0; i < len; i++) samples[i] = this.data[i] / 127.5 - 1;
 
-    // Generate IR using the seeded PRNG so the reverb pattern is deterministic.
-    // Exponential decay envelope: -60 dB at the end of the tail.
-    const ir = new Float32Array(irLen);
-    for (let i = 0; i < irLen; i++)
-      ir[i] = (this.rand() * 2 - 1) * Math.exp(-6.9 * i / irLen);
+    const srcBuffer = new AudioBuffer({ numberOfChannels: 1, length: len, sampleRate });
+    srcBuffer.copyToChannel(samples, 0);
 
-    // Render via Web Audio ConvolverNode. Output length = signal + IR tail.
-    const offCtx = new OfflineAudioContext(1, len + irLen, sampleRate);
+    const rendered = await Tone.Offline(({ transport }: any) => {
+      const freeverb = new Tone.Freeverb({ roomSize, dampening, wet }).toDestination();
+      const player = new Tone.Player(new Tone.ToneAudioBuffer(srcBuffer));
+      player.connect(freeverb);
+      player.start(0);
+      transport.start(0);
+    }, duration + 1.0);
 
-    const sigBuf = offCtx.createBuffer(1, len, sampleRate);
-    sigBuf.copyToChannel(samples, 0);
-    const irBuf = offCtx.createBuffer(1, irLen, sampleRate);
-    irBuf.copyToChannel(ir, 0);
-
-    const src = offCtx.createBufferSource();
-    src.buffer = sigBuf;
-
-    const conv = offCtx.createConvolver();
-    conv.buffer = irBuf;
-
-    const wetGain = offCtx.createGain();
-    wetGain.gain.value = wet;
-    const dryGain = offCtx.createGain();
-    dryGain.gain.value = 1 - wet;
-
-    src.connect(conv);
-    conv.connect(wetGain);
-    wetGain.connect(offCtx.destination);
-    src.connect(dryGain);
-    dryGain.connect(offCtx.destination);
-
-    src.start(0);
-    const rendered = await offCtx.startRendering();
-
-    // Convert back: floats [-1, 1] → bytes [0, 255], first `len` samples only
     const out = rendered.getChannelData(0);
     for (let i = 0; i < len; i++) {
       const v = (out[i] + 1) * 127.5;

@@ -27,7 +27,7 @@ A small Lisp that operates on the image's raw byte buffer (RGB, left-to-right, t
 bitcrush n             # quantise to 2^n discrete levels  (n = 1–8)
 noise db               # add gaussian noise               (e.g. -30 = subtle, -6 = heavy)
 echo delay gain        # single echo                      (delay = 0–100, gain in dB)
-reverb time wet        # convolve with decaying noise IR  (time = 0–100, wet = 0–1)
+reverb roomSize damp wet  # Freeverb plate reverb          (roomSize = 0–1, damp = Hz, wet = 0–1)
 tremolo rate depth     # LFO amplitude modulation         (rate = oscillations, depth = 0–1)
 distort drive          # tanh soft-clip saturation        (drive ~1 = clean, ~10 = heavy)
 chorus rate depth wet  # LFO time-shift mix               (rate = oscillations, depth = 0–1, wet = 0–1)

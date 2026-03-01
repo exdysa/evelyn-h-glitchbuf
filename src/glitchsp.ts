@@ -240,7 +240,7 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   const env = new GlitchEnv();
 
-  env.set('reverb', (t: GlitchVal, w: GlitchVal): Promise<GlitchVal> => buf.val.reverb(t as Percentage, w as Wet));
+  env.set('reverb', (r: GlitchVal, d: GlitchVal, w: GlitchVal): Promise<GlitchVal> => buf.val.reverb(r as number, d as number, w as Wet));
   env.set('rescale', (w: GlitchVal, h: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number));
   // alt name for rescale
   env.set('resize', (w: GlitchVal, h: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number));
