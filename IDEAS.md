@@ -2,9 +2,6 @@
 
 ## 1d
   - something to get some solid blocks of color?
-  - invert
-  - pixel sort? random order?
-  - 
 
 ## 2d:
   - dithering
@@ -16,7 +13,6 @@
 
 ## language constructs?
   - easy way to build your own effect (1d and 2d), doing whatever you want with the data
-  
 
 
 # UI / features

@@ -241,9 +241,9 @@ function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   const env = new GlitchEnv();
 
   env.set('reverb', (r: GlitchVal, d: GlitchVal, w: GlitchVal): Promise<GlitchVal> => buf.val.reverb(r as number, d as Frequency, w as Wet));
-  env.set('rescale', (w: GlitchVal, h: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number));
+  env.set('rescale', (w: GlitchVal, h?: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number | undefined));
   // alt name for rescale
-  env.set('resize', (w: GlitchVal, h: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number));
+  env.set('resize', (w: GlitchVal, h?: GlitchVal): Promise<GlitchVal> => buf.val.rescale(w as number, h as number | undefined));
   env.set('bitcrush', (bits: GlitchVal): GlitchVal => buf.val.bitcrush(bits as number));
   env.set('noise', (amt: GlitchVal): GlitchVal => buf.val.noise(amt as Decibels));
   env.set('reverse', (): GlitchVal => buf.val.reverse());

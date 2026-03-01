@@ -24,7 +24,7 @@ interface IGlitchBuffer {
   reverse(): this;
   echo(delay: Percentage, gainDb: Decibels): this;
   reverb(roomSize: number, dampening: Frequency, wet: Wet): Promise<this>;
-  rescale(newWidth: number, newHeight: number): Promise<this>;
+  rescale(newWidth: number, newHeight?: number): Promise<this>;
   select(start: Percentage, end: Percentage, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   copy(srcStart: Percentage, srcEnd: Percentage, dstStart: Percentage): this;
   tremolo(rate: number, depth: number): this;
@@ -114,7 +114,7 @@ class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  async rescale(newWidth: number, newHeight: number): Promise<this> {
+  async rescale(newWidth: number, newHeight = Math.round(newWidth * this.height / this.width)): Promise<this> {
     const src = new OffscreenCanvas(this.width, this.height);
     src.getContext('2d')!.putImageData(
       new ImageData(glitchToRgba(this.data, this.width, this.height), this.width, this.height), 0, 0);

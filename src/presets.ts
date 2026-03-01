@@ -41,6 +41,7 @@ noise -30
 ` },
   {
     name: 'phaser', code: `\
+resize 1024
 mix .7 (do 
   (noise -18)
   (phaser .2 3 50 1) 

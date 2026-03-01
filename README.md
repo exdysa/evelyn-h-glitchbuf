@@ -60,7 +60,8 @@ smear amount decay     # propagate peak value forward with decay (amount 0–100
 xor value              # XOR every byte against value            (0–255; try 85 or 170)
 shuffle amount         # randomly swap amount% of pixels (seeded, whole RGB pixels, 0–100)
 transpose ch dx dy     # shift one channel layer by dx/dy (0–100% of width/height, wraps)
-rescale w h            # resize image to w×h pixels
+rescale w h            # resize image to w×h pixels (h optional — omit to preserve aspect ratio)
+resize w h             # alias for rescale
 ```
 
 ### Special forms
