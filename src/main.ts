@@ -70,7 +70,21 @@ function randomSeed(): number {
   return Math.floor(Math.random() * 0x100000000);
 }
 
-seedInput.value = String(randomSeed());
+function b64encode(s: string): string {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+}
+function b64decode(s: string): string {
+  return new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0)));
+}
+
+function updateUrl(): void {
+  const params = new URLSearchParams({ seed: seedInput.value, script: b64encode(codeArea.value) });
+  history.replaceState(null, '', '?' + params.toString());
+}
+
+const _initParams = new URLSearchParams(location.search);
+seedInput.value = _initParams.get('seed') ?? String(randomSeed());
+if (_initParams.has('script')) codeArea.value = b64decode(_initParams.get('script')!);
 
 let errorTimer: number | null = null;
 
@@ -84,6 +98,7 @@ function showError(msg: string, immediate: boolean): void {
 }
 
 async function runImage(immediate = false): Promise<void> {
+  updateUrl();
   if (!originalBuffer) return;
   loadingEl.classList.add('visible');
   try {
@@ -207,6 +222,7 @@ presetsSelect.addEventListener('change', async () => {
     deletePresetBtn.disabled = false;
   }
   if (code !== undefined) {
+    history.pushState(null, '', location.href);
     codeArea.value = code;
     lastLoadedCode = code;
     currentSelectValue = val;
@@ -255,4 +271,19 @@ downloadBtn.addEventListener('click', () => {
     a.click();
     URL.revokeObjectURL(url);
   });
+});
+
+window.addEventListener('popstate', () => {
+  const params = new URLSearchParams(location.search);
+  const seed = params.get('seed');
+  const script = params.get('script');
+  if (seed !== null) seedInput.value = seed;
+  if (script !== null) {
+    codeArea.value = b64decode(script);
+    lastLoadedCode = script;
+    presetsSelect.value = '';
+    currentSelectValue = '';
+    deletePresetBtn.disabled = true;
+  }
+  if (originalBuffer) runImage(true);
 });

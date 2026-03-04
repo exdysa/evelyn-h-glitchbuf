@@ -1,6 +1,6 @@
 # glitchbuf — agent context
 
-Keep this file and `README.md` up to date whenever you add ops, change file structure, or alter key design decisions. Future-you will thank you.
+Keep `AGENTS.md` (`CLAUDE.md` is a symlink) and `README.md` up to date whenever you add ops, change file structure, or alter key design decisions. Future-you will thank you.
 
 ## Goals
 
