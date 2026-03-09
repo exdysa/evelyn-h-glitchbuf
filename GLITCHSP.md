@@ -118,13 +118,22 @@ if (> (rand) 0.5) (bitcrush 4) (noise -20)
 
 ## language builtins
 
-### `rand`, `rand n`
+### `rand`, `rand max`, `rand min max`
 
-seeded random number. `(rand)` returns 0–1; `(rand n)` returns 0–n. uses the seed from the seed field — same seed always gives the same sequence.
+seeded random number. `(rand)` returns 0–1; `(rand max)` returns 0–max; `(rand min max)` returns min–max. uses the seed from the seed field — same seed always gives the same sequence.
 
 ```
 noise (* -10 (rand 3))
 if (> (rand) 0.5) (invert) (reverse)
+```
+
+### `randn`, `randn std`, `randn mean std`
+
+normally distributed random number (gaussian) via box-muller. `(randn)` returns N(0,1); `(randn std)` returns N(0,std); `(randn mean std)` returns N(mean,std). uses the same seeded prng as `rand`.
+
+```
+noise (randn -18 4)          ; noise amount clustered around -18 dB
+echo (randn 0.5 0.1) -12     ; delay clustered around 0.5
 ```
 
 ### channel constants

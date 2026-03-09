@@ -10,7 +10,6 @@ let imgHeight = 0;
 let runTimer: number | null = null;
 
 const fileInput = document.getElementById('file') as HTMLInputElement;
-const runBtn = document.getElementById('run') as HTMLButtonElement;
 const downloadBtn = document.getElementById('download') as HTMLButtonElement;
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 const newSeedBtn = document.getElementById('new-seed') as HTMLButtonElement;
@@ -142,7 +141,8 @@ function scheduleRun(): void {
   if (runTimer !== null) clearTimeout(runTimer);
   runTimer = window.setTimeout(() => {
     runTimer = null;
-    if (tryParse(getScript())) runImage();
+    try { parse(getScript()); } catch (e) { showError(String(e), false); return; }
+    runImage();
   }, 300);
 }
 
@@ -172,8 +172,6 @@ fileInput.addEventListener('change', () => {
   };
   reader.readAsDataURL(file);
 });
-
-runBtn.addEventListener('click', () => runImage(true));
 
 // Track the code that was last intentionally loaded so we can detect edits.
 let lastLoadedCode = getScript();
