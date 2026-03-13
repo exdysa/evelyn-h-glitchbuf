@@ -289,8 +289,23 @@ function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   env.set('not', (a: GlitchVal): GlitchVal => !a);
 
   // random — uses seeded PRNG
-  env.set('rand', (...args: GlitchVal[]): GlitchVal =>
-    args.length > 0 ? rand() * (args[0] as number) : rand());
+  // (rand) → 0–1, (rand max) → 0–max, (rand min max) → min–max
+  env.set('rand', (...args: GlitchVal[]): GlitchVal => {
+    if (args.length >= 2) {
+      const min = args[0] as number, max = args[1] as number;
+      return min + rand() * (max - min);
+    }
+    return args.length === 1 ? rand() * (args[0] as number) : rand();
+  });
+
+  // normal distribution via Box-Muller — uses seeded PRNG
+  // (randn) → N(0,1), (randn std) → N(0,std), (randn mean std) → N(mean,std)
+  env.set('randn', (...args: GlitchVal[]): GlitchVal => {
+    const u = rand(), v = rand();
+    const n = Math.sqrt(-2 * Math.log(u === 0 ? 1e-10 : u)) * Math.cos(2 * Math.PI * v);
+    if (args.length >= 2) return (args[0] as number) + n * (args[1] as number);
+    return args.length === 1 ? n * (args[0] as number) : n;
+  });
 
   return env;
 }
@@ -323,9 +338,6 @@ function splitIntoBlocks(src: string): string[] {
 
 // ── Entry point ────────────────────────────────────────────────────────────
 
-function tryParse(code: string): boolean {
-  try { parse(code); return true; } catch { return false; }
-}
 
 async function runGlitchsp(code: string, image: IGlitchBuffer, rand: () => number): Promise<void> {
   const buf: BufCell = { val: image };

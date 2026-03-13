@@ -10,7 +10,6 @@ let imgHeight = 0;
 let runTimer: number | null = null;
 
 const fileInput = document.getElementById('file') as HTMLInputElement;
-const runBtn = document.getElementById('run') as HTMLButtonElement;
 const downloadBtn = document.getElementById('download') as HTMLButtonElement;
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 const newSeedBtn = document.getElementById('new-seed') as HTMLButtonElement;
@@ -27,6 +26,11 @@ const modalMsg = document.getElementById('modal-msg') as HTMLParagraphElement;
 const modalInput = document.getElementById('modal-input') as HTMLInputElement;
 const modalOkBtn = document.getElementById('modal-ok') as HTMLButtonElement;
 const modalCancelBtn = document.getElementById('modal-cancel') as HTMLButtonElement;
+const presetConfirmDialog = document.getElementById('preset-confirm-dialog') as HTMLDialogElement;
+const presetConfirmNameInput = document.getElementById('preset-confirm-name') as HTMLInputElement;
+const presetConfirmSaveBtn = document.getElementById('preset-confirm-save') as HTMLButtonElement;
+const presetConfirmDiscardBtn = document.getElementById('preset-confirm-discard') as HTMLButtonElement;
+const presetConfirmCancelBtn = document.getElementById('preset-confirm-cancel') as HTMLButtonElement;
 const helpBtn = document.getElementById('help-btn') as HTMLButtonElement;
 const helpDialog = document.getElementById('help-dialog') as HTMLDialogElement;
 const helpContent = document.getElementById('help-content') as HTMLDivElement;
@@ -66,10 +70,10 @@ function openModal(opts: { message: string; ok?: string; input?: boolean; initia
 function fitCanvas(): void {
   if (!canvas.width || !canvas.height) return;
   const s = getComputedStyle(canvasPaneEl);
-  const pw = canvasPaneEl.clientWidth  - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
-  const ph = canvasPaneEl.clientHeight - parseFloat(s.paddingTop)  - parseFloat(s.paddingBottom);
+  const pw = canvasPaneEl.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+  const ph = canvasPaneEl.clientHeight - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom);
   const scale = Math.min(pw / canvas.width, ph / canvas.height);
-  canvas.style.width  = Math.round(canvas.width  * scale) + 'px';
+  canvas.style.width = Math.round(canvas.width * scale) + 'px';
   canvas.style.height = Math.round(canvas.height * scale) + 'px';
 }
 
@@ -92,7 +96,15 @@ function updateUrl(): void {
 }
 
 // Initialise editor before reading URL params so setScript works immediately.
-initEditor(document.getElementById('editor')!, scheduleRun, showHelpTab);
+initEditor(document.getElementById('editor')!, () => {
+  // Reset preset select when user edits the script so the same preset can be re-selected.
+  if (presetsSelect.value) {
+    presetsSelect.value = '';
+    currentSelectValue = '';
+    deletePresetBtn.disabled = true;
+  }
+  scheduleRun();
+}, showHelpTab);
 
 const _initParams = new URLSearchParams(location.search);
 seedInput.value = _initParams.get('seed') ?? String(randomSeed());
@@ -142,7 +154,8 @@ function scheduleRun(): void {
   if (runTimer !== null) clearTimeout(runTimer);
   runTimer = window.setTimeout(() => {
     runTimer = null;
-    if (tryParse(getScript())) runImage();
+    try { parse(getScript()); } catch (e) { showError(String(e), false); return; }
+    runImage();
   }, 300);
 }
 
@@ -173,16 +186,52 @@ fileInput.addEventListener('change', () => {
   reader.readAsDataURL(file);
 });
 
-runBtn.addEventListener('click', () => runImage(true));
-
 // Track the code that was last intentionally loaded so we can detect edits.
-let lastLoadedCode = getScript();
+// If the page loaded with a URL script, use '' so selecting a preset always prompts.
+let lastLoadedCode = _initParams.has('script') ? '' : getScript();
 // Track the select's committed value so we can restore it on cancel.
 let currentSelectValue = '';
 
 buildPresetSelect(presetsSelect);
 currentSelectValue = presetsSelect.value;
 deletePresetBtn.disabled = !presetsSelect.value.startsWith('user:');
+
+function openPresetConfirmModal(): Promise<'save' | 'discard' | null> {
+  return new Promise(resolve => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    presetConfirmNameInput.value =
+      `${String(now.getFullYear())}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    presetConfirmDialog.showModal();
+    presetConfirmSaveBtn.focus();
+
+    function done(result: 'save' | 'discard' | null) {
+      presetConfirmSaveBtn.removeEventListener('click', onSave);
+      presetConfirmDiscardBtn.removeEventListener('click', onDiscard);
+      presetConfirmCancelBtn.removeEventListener('click', onCancel);
+      presetConfirmDialog.removeEventListener('close', onClose);
+      if (presetConfirmDialog.open) presetConfirmDialog.close();
+      resolve(result);
+    }
+    const onSave = () => done('save');
+    const onDiscard = () => done('discard');
+    const onCancel = () => done(null);
+    const onClose = () => done(null);
+    presetConfirmSaveBtn.addEventListener('click', onSave);
+    presetConfirmDiscardBtn.addEventListener('click', onDiscard);
+    presetConfirmCancelBtn.addEventListener('click', onCancel);
+    presetConfirmDialog.addEventListener('close', onClose, { once: true });
+  });
+}
+
+function saveCurrentAsPreset(name: string, selectAfter?: string): void {
+  const userPresets = loadUserPresets();
+  const existing = userPresets.findIndex(p => p.name === name);
+  if (existing >= 0) userPresets[existing].code = getScript();
+  else userPresets.push({ name, code: getScript() });
+  saveUserPresets(userPresets);
+  buildPresetSelect(presetsSelect, selectAfter);
+}
 
 presetsSelect.addEventListener('change', async () => {
   const val = presetsSelect.value;
@@ -192,10 +241,14 @@ presetsSelect.addEventListener('change', async () => {
   }
 
   if (getScript() !== lastLoadedCode) {
-    const ok = await openModal({ message: 'load preset and discard current changes?', ok: 'load preset' });
-    if (ok === null) {
+    const result = await openPresetConfirmModal();
+    if (result === null) {
       presetsSelect.value = currentSelectValue;
       return;
+    }
+    if (result === 'save') {
+      const name = presetConfirmNameInput.value.trim();
+      if (name) saveCurrentAsPreset(name, val);
     }
   }
 
@@ -221,16 +274,8 @@ presetsSelect.addEventListener('change', async () => {
 savePresetBtn.addEventListener('click', async () => {
   const name = await openModal({ message: 'preset name:', ok: 'save', input: true });
   if (!name) return;
-  const userPresets = loadUserPresets();
-  const existing = userPresets.findIndex(p => p.name === name);
-  if (existing >= 0) {
-    userPresets[existing].code = getScript();
-  } else {
-    userPresets.push({ name, code: getScript() });
-  }
-  saveUserPresets(userPresets);
   const savedVal = 'user:' + name;
-  buildPresetSelect(presetsSelect, savedVal);
+  saveCurrentAsPreset(name, savedVal);
   lastLoadedCode = getScript();
   currentSelectValue = savedVal;
   deletePresetBtn.disabled = false;

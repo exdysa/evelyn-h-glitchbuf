@@ -2,6 +2,7 @@
  - every line of code is a liability. aggressively clean up and factor out reusable parts of code.
  - use the type system! enforce invariants whenever possible and always be specific.
  - always be on the lookout for refactoring opportunities and make sure to update and re-consider old code when changing or adding things.
+ - when factoring out behavior, aim for general purpose reusable code rather than specific and situational.
  - lowercase is best case. remember this <3
 
 # glitchbuf — agent context

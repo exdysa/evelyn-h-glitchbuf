@@ -138,19 +138,6 @@ input[type="file"]::file-selector-button:hover {
 }
 
 
-#help-btn {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  padding: 0 6px;
-  line-height: 20px;
-  opacity: 0.5;
-  z-index: 1;
-}
-
-#help-btn:hover {
-  opacity: 1;
-}
 
 dialog {
   background: var(--bg-input);
@@ -239,7 +226,9 @@ dialog::backdrop {
   gap: 3px 6px;
 }
 
-.presets-row select {
+.presets-row select,
+#add-effect-select,
+#wrap-select {
   background: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--fg);
@@ -252,6 +241,11 @@ dialog::backdrop {
 .buttons {
   display: flex;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+#help-btn {
+  margin-right: auto;
 }
 
 #error {
@@ -335,6 +329,19 @@ dialog::backdrop {
   width: 100%;
   margin-bottom: 12px;
 }
+
+#preset-confirm-name {
+  width: 100%;
+}
+
+#preset-confirm-dialog .field {
+  margin-bottom: 12px;
+}
+
+.preset-confirm-buttons .spacer {
+  flex: 1;
+}
+
 
 .modal-buttons {
   display: flex;

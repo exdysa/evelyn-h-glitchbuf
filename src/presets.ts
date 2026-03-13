@@ -5,8 +5,8 @@ interface Preset { name: string; code: string; }
 const BUILT_IN_PRESETS: Preset[] = [
   {
     name: 'chromatic aberration', code: `\
-transpose R 4 1
-transpose B -4 -1
+transpose R (randn 2) (randn 2)
+transpose B (randn 2) (randn 2)
 ` },
   {
     name: 'bitcrush', code: `\

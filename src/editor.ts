@@ -128,6 +128,16 @@ let _dialogName: HTMLElement;
 let _dialogDesc: HTMLElement;
 let _dialogParams: HTMLElement;
 let _dialogApply: HTMLButtonElement;
+let _addDialog: HTMLDialogElement;
+let _addSelect: HTMLSelectElement;
+let _addDesc: HTMLParagraphElement;
+let _addParams: HTMLDivElement;
+let _addApplyBtn: HTMLButtonElement;
+let _wrapDialog: HTMLDialogElement;
+let _wrapSelect: HTMLSelectElement;
+let _wrapDesc: HTMLParagraphElement;
+let _wrapParams: HTMLDivElement;
+let _wrapApplyBtn: HTMLButtonElement;
 let _onChange: () => void;
 let _openHelp: ((tab: string) => void) | undefined;
 let _dragIndex: number | null = null;
@@ -332,28 +342,16 @@ function startScrub(
 
 // ── Effect modal ──────────────────────────────────────────────────────────────
 
-function openEffectModal(
+// Renders param rows into container. argNodes[j] is the parsed arg for param j
+// (undefined = use default). currentText is needed to display complex expressions verbatim.
+// Returns getArgs() which yields one formatted string per param (complex = verbatim expression).
+function renderParamInputs(
+  container: HTMLElement,
   meta: OpDef,
-  currentText: string,
-  lineIndex: number,
-  exprRange?: { start: number; end: number }
-): void {
-  _dialogName.textContent = meta.name;
-  _dialogDesc.textContent = meta.desc;
-  _dialogParams.innerHTML = '';
-
-  // Parse the block into an AST so we can inspect each arg's structure.
-  let listAst: Extract<ParseNode, { kind: 'list' }> | null = null;
-  try {
-    const ast = parseBlock(currentText);
-    listAst = ast.kind === 'list' ? ast : null;
-  } catch { /* malformed — inputs will show defaults */ }
-
-  // children[0] = op name, children[1..n] = args, children[n+1..] = body (special forms)
-  const argNodes = listAst ? listAst.children.slice(1, 1 + meta.params.length) : [];
-  const isParenForm = listAst !== null && !listAst.bare;
+  argNodes: (ParseNode | undefined)[],
+  currentText?: string
+): () => string[] {
   const inputs: HTMLInputElement[] = [];
-  // Track which params are complex (non-literal) so we can preserve them on apply.
   const isComplex: boolean[] = [];
 
   meta.params.forEach((param, j) => {
@@ -389,7 +387,9 @@ function openEffectModal(
     num.min = String(param.min);
     num.max = String(param.max);
     num.step = String(param.step ?? 1);
-    num.value = isComplex[j] ? currentText.slice(argNode!.span.start, argNode!.span.end) : String(initVal);
+    num.value = isComplex[j] && currentText && argNode
+      ? currentText.slice(argNode.span.start, argNode.span.end)
+      : String(initVal);
     num.disabled = isComplex[j];
     if (isComplex[j]) num.title = 'complex expression — edit in source';
 
@@ -404,17 +404,44 @@ function openEffectModal(
 
     inputs.push(num);
     row.append(label, range, num);
-    _dialogParams.appendChild(row);
+    container.appendChild(row);
   });
+
+  return () => inputs.map((inp, j) => {
+    if (isComplex[j] && currentText && argNodes[j]) {
+      return currentText.slice(argNodes[j]!.span.start, argNodes[j]!.span.end);
+    }
+    const v = parseFloat(inp.value);
+    return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString();
+  });
+}
+
+function openEffectModal(
+  meta: OpDef,
+  currentText: string,
+  lineIndex: number,
+  exprRange?: { start: number; end: number }
+): void {
+  _dialogName.textContent = meta.name;
+  _dialogDesc.textContent = meta.desc;
+  _dialogParams.innerHTML = '';
+
+  // Parse the block into an AST so we can inspect each arg's structure.
+  let listAst: Extract<ParseNode, { kind: 'list' }> | null = null;
+  try {
+    const ast = parseBlock(currentText);
+    listAst = ast.kind === 'list' ? ast : null;
+  } catch { /* malformed — inputs will show defaults */ }
+
+  // children[0] = op name, children[1..n] = args, children[n+1..] = body (special forms)
+  const argNodes = (listAst ? listAst.children.slice(1, 1 + meta.params.length) : []) as (ParseNode | undefined)[];
+  const isParenForm = listAst !== null && !listAst.bare;
+
+  const getArgs = renderParamInputs(_dialogParams, meta, argNodes, currentText);
 
   _dialogApply.hidden = meta.params.length === 0;
   _dialogApply.onclick = () => {
-    // Build each arg: preserve complex expressions verbatim, use slider for simple ones.
-    const args = inputs.map((inp, j) => {
-      if (isComplex[j]) return currentText.slice(argNodes[j].span.start, argNodes[j].span.end);
-      const v = parseFloat(inp.value);
-      return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString();
-    });
+    const args = getArgs();
 
     // For special forms, preserve the body nodes verbatim using their spans.
     const bodyNodes = listAst && !meta.invoke ? listAst.children.slice(1 + meta.params.length) : [];
@@ -437,6 +464,97 @@ function openEffectModal(
   };
 
   _effectDialog.showModal();
+}
+
+const ADD_KIND_ORDER: OpKind[] = [OpKind.byte, OpKind.pixel, OpKind.audio, OpKind.image];
+
+function openAddEffectDialog(): void {
+  _addSelect.innerHTML = '';
+  for (const kind of ADD_KIND_ORDER) {
+    const ops = OPS.filter(op => op.invoke && op.kind === kind)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (ops.length === 0) continue;
+    const group = document.createElement('optgroup');
+    group.label = kind;
+    for (const op of ops) {
+      const opt = document.createElement('option');
+      opt.value = op.name;
+      opt.textContent = op.name;
+      group.appendChild(opt);
+    }
+    _addSelect.appendChild(group);
+  }
+
+  let getArgs: () => string[] = () => [];
+
+  function updateForSelection(): void {
+    const meta = OP_MAP.get(_addSelect.value);
+    if (!meta) return;
+    _addDesc.textContent = meta.desc;
+    _addParams.innerHTML = '';
+    getArgs = renderParamInputs(_addParams, meta, []);
+  }
+
+  _addSelect.onchange = updateForSelection;
+  updateForSelection();
+
+  _addApplyBtn.onclick = () => {
+    const meta = OP_MAP.get(_addSelect.value);
+    if (!meta) return;
+    const block = [meta.name, ...getArgs()].join(' ').trimEnd();
+    _editorLines.push(block);
+    renderEditor();
+    _onChange();
+    _addDialog.close();
+  };
+
+  _addDialog.showModal();
+}
+
+// ── Wrap dialog ───────────────────────────────────────────────────────────────
+
+const WRAP_OPS = OPS.filter(op => op.kind === OpKind.wrap);
+
+function openWrapDialog(lineIndex: number): void {
+  _wrapSelect.innerHTML = '';
+  for (const op of WRAP_OPS) {
+    const opt = document.createElement('option');
+    opt.value = op.name;
+    opt.textContent = op.name;
+    _wrapSelect.appendChild(opt);
+  }
+
+  let getArgs: () => string[] = () => [];
+
+  function updateForSelection(): void {
+    const meta = OP_MAP.get(_wrapSelect.value);
+    if (!meta) return;
+    _wrapDesc.textContent = meta.desc;
+    _wrapParams.innerHTML = '';
+    getArgs = renderParamInputs(_wrapParams, meta, []);
+  }
+
+  _wrapSelect.onchange = updateForSelection;
+  updateForSelection();
+
+  _wrapApplyBtn.onclick = () => {
+    const meta = OP_MAP.get(_wrapSelect.value);
+    if (!meta) return;
+    const original = _editorLines[lineIndex];
+    let bodyText: string;
+    try {
+      const ast = parseBlock(original);
+      bodyText = (ast.kind === 'list' && !ast.bare) ? original : `(${original})`;
+    } catch {
+      bodyText = `(${original})`;
+    }
+    _editorLines[lineIndex] = `(${meta.name} ${[...getArgs(), bodyText].join(' ')})`;
+    renderEditor();
+    _onChange();
+    _wrapDialog.close();
+  };
+
+  _wrapDialog.showModal();
 }
 
 // ── Raw mode ──────────────────────────────────────────────────────────────────
@@ -496,7 +614,8 @@ function attachBlockHandlers(
   handle.addEventListener('pointerup', () => {
     if (_dragIndex !== null && _dropIndex !== null && _dragIndex !== _dropIndex) {
       const [moved] = _editorLines.splice(_dragIndex, 1);
-      _editorLines.splice(_dropIndex, 0, moved);
+      const insertAt = _dropIndex > _dragIndex ? _dropIndex - 1 : _dropIndex;
+      _editorLines.splice(insertAt, 0, moved);
       renderEditor();
       _onChange();
     }
@@ -573,8 +692,13 @@ function attachBlockHandlers(
   // ── Edit interactions ───────────────────────────────────────────────────────
   editEl.addEventListener('blur', () => {
     if (_suppressBlur) return;
-    // Read back, strip the trailing newline some browsers insert
     const text = getEditText(editEl);
+    if (text === '' && _editorLines.length > 1) {
+      _editorLines.splice(i, 1);
+      renderEditor();
+      _onChange();
+      return;
+    }
     _editorLines[i] = text;
     editEl.hidden = true;
     displayEl.hidden = false;
@@ -625,9 +749,20 @@ function attachBlockHandlers(
 
     if (e.key === 'Tab') {
       e.preventDefault();
-      _editorLines[i] = getEditText(editEl);
-      editEl.blur();
-      focusLine(i + (e.shiftKey ? -1 : 1));
+      const text = getEditText(editEl);
+      if (text === '' && _editorLines.length > 1) {
+        // Remove the empty line and focus correctly without index skew from blur.
+        _editorLines.splice(i, 1);
+        _suppressBlur = true;
+        renderEditor();
+        _suppressBlur = false;
+        focusLine(e.shiftKey ? i - 1 : i);
+        _onChange();
+      } else {
+        _editorLines[i] = text;
+        editEl.blur();
+        focusLine(i + (e.shiftKey ? -1 : 1));
+      }
       return;
     }
 
@@ -702,6 +837,7 @@ function attachBlockHandlers(
 // ── Render ────────────────────────────────────────────────────────────────────
 
 function renderEditor(): void {
+  _suppressBlur = false;
   _editorEl.innerHTML = '';
 
   _editorLines.forEach((block, i) => {
@@ -713,6 +849,15 @@ function renderEditor(): void {
     handle.className = 'drag-handle';
     handle.setAttribute('aria-hidden', 'true');
     handle.textContent = '⠿';
+
+    const wrapBtn = document.createElement('button');
+    wrapBtn.type = 'button';
+    wrapBtn.className = 'wrap-btn';
+    wrapBtn.textContent = '()';
+    wrapBtn.title = 'wrap in a special form';
+    wrapBtn.addEventListener('pointerdown', () => { _suppressBlur = true; });
+    wrapBtn.addEventListener('pointerup', () => { _suppressBlur = false; });
+    wrapBtn.addEventListener('click', () => openWrapDialog(i));
 
     const lineWrap = document.createElement('div');
     lineWrap.className = 'line-wrap';
@@ -728,12 +873,34 @@ function renderEditor(): void {
     editEl.spellcheck = false;
     editEl.hidden = true;
 
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'delete-line-btn';
+    deleteBtn.textContent = '×';
+    deleteBtn.title = 'remove this block';
+    deleteBtn.addEventListener('pointerdown', () => { _suppressBlur = true; });
+    deleteBtn.addEventListener('pointerup', () => { _suppressBlur = false; });
+    deleteBtn.addEventListener('click', () => {
+      _editorLines.splice(i, 1);
+      if (_editorLines.length === 0) _editorLines = [''];
+      renderEditor();
+      _onChange();
+    });
+
     lineWrap.append(displayEl, editEl);
-    lineEl.append(handle, lineWrap);
+    lineEl.append(handle, wrapBtn, lineWrap, deleteBtn);
     _editorEl.appendChild(lineEl);
 
     attachBlockHandlers(lineEl, displayEl, editEl, i);
   });
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'add-effect-btn';
+  addBtn.textContent = '+';
+  addBtn.title = 'add a new effect';
+  addBtn.addEventListener('click', openAddEffectDialog);
+  _editorEl.appendChild(addBtn);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -756,6 +923,29 @@ function initEditor(
   _effectDialog.addEventListener('click', e => {
     if (e.target === _effectDialog) _effectDialog.close();
   });
+
+  _addDialog = document.getElementById('add-effect-dialog') as HTMLDialogElement;
+  _addSelect = document.getElementById('add-effect-select') as HTMLSelectElement;
+  _addDesc = document.getElementById('add-effect-desc') as HTMLParagraphElement;
+  _addParams = document.getElementById('add-effect-params') as HTMLDivElement;
+  _addApplyBtn = document.getElementById('add-effect-apply') as HTMLButtonElement;
+  document.getElementById('add-effect-cancel')!
+    .addEventListener('click', () => _addDialog.close());
+  _addDialog.addEventListener('click', e => {
+    if (e.target === _addDialog) _addDialog.close();
+  });
+
+  _wrapDialog = document.getElementById('wrap-dialog') as HTMLDialogElement;
+  _wrapSelect = document.getElementById('wrap-select') as HTMLSelectElement;
+  _wrapDesc = document.getElementById('wrap-desc') as HTMLParagraphElement;
+  _wrapParams = document.getElementById('wrap-params') as HTMLDivElement;
+  _wrapApplyBtn = document.getElementById('wrap-apply') as HTMLButtonElement;
+  document.getElementById('wrap-cancel')!
+    .addEventListener('click', () => _wrapDialog.close());
+  _wrapDialog.addEventListener('click', e => {
+    if (e.target === _wrapDialog) _wrapDialog.close();
+  });
+
   renderEditor();
 }
 

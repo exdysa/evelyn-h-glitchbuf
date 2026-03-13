@@ -51,11 +51,10 @@
       <label>script</label>
       <div class="textarea-wrap">
         <div id="editor"></div>
-        <button id="help-btn" type="button" aria-label="help">?</button>
       </div>
     </div>
     <div class="buttons">
-      <button id="run" type="button">run</button>
+      <button id="help-btn" type="button">help</button>
       <button id="download" type="button">download png</button>
     </div>
     <pre id="error" role="alert"></pre>
@@ -68,6 +67,19 @@
       <button id="modal-cancel" type="button">cancel</button>
     </div>
   </dialog>
+  <dialog id="preset-confirm-dialog" aria-labelledby="preset-confirm-msg" aria-modal="true">
+    <p id="preset-confirm-msg">save current script as a preset before loading?</p>
+    <div class="field">
+      <label for="preset-confirm-name">name</label>
+      <input id="preset-confirm-name" type="text" spellcheck="false">
+    </div>
+    <div class="modal-buttons preset-confirm-buttons">
+      <button id="preset-confirm-save" type="button">save &amp; load</button>
+      <div class="spacer"></div>
+      <button id="preset-confirm-discard" type="button">discard</button>
+      <button id="preset-confirm-cancel" type="button">cancel</button>
+    </div>
+  </dialog>
   <dialog id="effect-dialog" aria-modal="true">
     <p id="effect-dialog-name"></p>
     <p id="effect-dialog-desc"></p>
@@ -75,6 +87,30 @@
     <div class="modal-buttons">
       <button id="effect-dialog-apply" type="button">apply</button>
       <button id="effect-dialog-cancel" type="button">cancel</button>
+    </div>
+  </dialog>
+  <dialog id="add-effect-dialog" aria-modal="true">
+    <div class="add-effect-select-row">
+      <label for="add-effect-select">effect</label>
+      <select id="add-effect-select"></select>
+    </div>
+    <p id="add-effect-desc"></p>
+    <div id="add-effect-params"></div>
+    <div class="modal-buttons">
+      <button id="add-effect-apply" type="button">add</button>
+      <button id="add-effect-cancel" type="button">cancel</button>
+    </div>
+  </dialog>
+  <dialog id="wrap-dialog" aria-modal="true">
+    <div class="add-effect-select-row">
+      <label for="wrap-select">wrap with</label>
+      <select id="wrap-select"></select>
+    </div>
+    <p id="wrap-desc"></p>
+    <div id="wrap-params"></div>
+    <div class="modal-buttons">
+      <button id="wrap-apply" type="button">wrap</button>
+      <button id="wrap-cancel" type="button">cancel</button>
     </div>
   </dialog>
   <dialog id="help-dialog" aria-label="help">
