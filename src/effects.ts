@@ -28,32 +28,37 @@ export interface IGlitchBuffer {
   select(start: Percentage, end: Percentage, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   copy(srcStart: Percentage, srcEnd: Percentage, dstStart: Percentage): this;
   tremolo(rate: number, depth: number): this;
-  distort(drive: number): this;
+  saturate(drive: number): this;
+  overdrive(drive: number): this;
   chorus(rate: number, depth: Decibels): this;
-  pitchShift(semitones: number): Promise<this>;
+  pitchShift(semitones: number, feedback?: number): Promise<this>;
   phaser(frequency: Frequency, octaves: number, baseFrequency: Frequency): Promise<this>;
   frequencyShift(frequency: Frequency): Promise<this>;
   vibrato(frequency: Frequency, depth: number): Promise<this>;
   chebyshev(order: number): Promise<this>;
   autowah(baseFrequency: Frequency, octaves: number, sensitivity: Decibels): Promise<this>;
   feedbackDelay(delayTime: Percentage, feedback: number): Promise<this>;
-  lowpass(frequency: Frequency, Q: number): Promise<this>;
-  highpass(frequency: Frequency, Q: number): Promise<this>;
+  lowpass(frequency: Frequency, Q: number, rolloff?: number): Promise<this>;
+  highpass(frequency: Frequency, Q: number, rolloff?: number): Promise<this>;
   bandpass(frequency: Frequency, Q: number): Promise<this>;
   notch(frequency: Frequency, Q: number): Promise<this>;
   lowshelf(frequency: Frequency, gain: Decibels): Promise<this>;
   highshelf(frequency: Frequency, gain: Decibels): Promise<this>;
+  jpeg(quality: number): Promise<this>;
+  bayer(levels: number): this;
+  diffuse(levels: number): this;
   sort(threshold: Percentage): this;
-  sortvertical(threshold: Percentage): this;
   smear(amount: Percentage, decay: number): this;
   xor(value: number): this;
   invert(): this;
   shuffle(amount: Percentage): this;
-  transpose(ch: number, dx: Percentage, dy: Percentage): this;
+  chromashift(ch: number, dx: Percentage, dy: Percentage): this;
   quantize(levels: number): this;
   fold(drive: number): this;
   solarize(threshold: number): this;
+  stutter(size: Percentage, count: number): this;
   channel(ch: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
+  transpose(fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   mix(wet: Wet, fn: (buf: IGlitchBuffer) => Promise<void>): Promise<this>;
 }
 
@@ -113,6 +118,7 @@ export class GlitchBuffer implements IGlitchBuffer {
 
   async select(start: Percentage, end: Percentage, fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
     const len = this.data.length;
+    if (start > end) { const t = start; start = end; end = t; }
     // subarray() is a zero-copy view — writes go directly into the parent buffer.
     // width/height aren't meaningful for a 1D slice; rescale inside select is unsupported.
     const sub = new GlitchBuffer(this.data.subarray(pct(start, len), pct(end, len)), 0, 0, this.rand);
@@ -175,6 +181,7 @@ export class GlitchBuffer implements IGlitchBuffer {
 
   copy(srcStart: Percentage, srcEnd: Percentage, dstStart: Percentage): this {
     const len = this.data.length;
+    if (srcStart > srcEnd) { const t = srcStart; srcStart = srcEnd; srcEnd = t; }
     const src = pct(srcStart, len);
     const srcE = pct(srcEnd, len);
     const dst = pct(dstStart, len);
@@ -193,7 +200,7 @@ export class GlitchBuffer implements IGlitchBuffer {
   noise(db: Decibels): this {
     const amplitude = 255 * dbToLin(db);
     for (let i = 0; i < this.data.length; i++)
-      this.data[i] = clamp8(this.data[i] + ((this.rand() * 2 - 1) + (this.rand() * 2 - 1)) * 0.5 * amplitude);
+      this.data[i] = clamp8(this.data[i] + (this.rand() * 2 - 1) * amplitude);
     return this;
   }
 
@@ -217,8 +224,15 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
+  // Hard clip: amplify then clamp. drive > 1 flattens peaks against the byte ceiling/floor.
+  overdrive(drive: number): this {
+    for (let i = 0; i < this.data.length; i++)
+      this.data[i] = clamp8((this.data[i] - 127.5) * drive + 127.5);
+    return this;
+  }
+
   // Soft-clip via tanh. drive > 1 saturates; ~1 = clean, ~10 = heavy crunch.
-  distort(drive: number): this {
+  saturate(drive: number): this {
     for (let i = 0; i < this.data.length; i++) {
       const x = this.data[i] / 127.5 - 1;
       this.data[i] = ((Math.tanh(x * drive) + 1) * 127.5 + 0.5) | 0;
@@ -248,7 +262,7 @@ export class GlitchBuffer implements IGlitchBuffer {
   }
 
   // Shift one RGB channel by (dx, dy) as 0–100 percentages of width/height. Wraps toroidally.
-  transpose(ch: number, dx: Percentage, dy: Percentage): this {
+  chromashift(ch: number, dx: Percentage, dy: Percentage): this {
     const { width, height } = this;
     if (!width || !height) return this;
     const offX = Math.round(dx / 100 * width);
@@ -309,6 +323,77 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
+  async jpeg(quality: number): Promise<this> {
+    const off = new OffscreenCanvas(this.width, this.height);
+    off.getContext('2d')!.putImageData(
+      new ImageData(glitchToRgba(this.data, this.width, this.height), this.width, this.height), 0, 0);
+    const blob = await off.convertToBlob({ type: 'image/jpeg', quality: quality / 100 });
+    const bitmap = await createImageBitmap(blob);
+    const dst = new OffscreenCanvas(this.width, this.height);
+    dst.getContext('2d')!.drawImage(bitmap, 0, 0);
+    this.data = rgbaToGlitch(dst.getContext('2d')!.getImageData(0, 0, this.width, this.height).data, this.width, this.height);
+    return this;
+  }
+
+  // 8×8 Bayer threshold matrix, values 0–63.
+  private static readonly BAYER8 = [
+    [ 0, 32,  8, 40,  2, 34, 10, 42],
+    [48, 16, 56, 24, 50, 18, 58, 26],
+    [12, 44,  4, 36, 14, 46,  6, 38],
+    [60, 28, 52, 20, 62, 30, 54, 22],
+    [ 3, 35, 11, 43,  1, 33,  9, 41],
+    [51, 19, 59, 27, 49, 17, 57, 25],
+    [15, 47,  7, 39, 13, 45,  5, 37],
+    [63, 31, 55, 23, 61, 29, 53, 21],
+  ];
+
+  // Ordered dithering using the 8×8 Bayer matrix. Adds a spatially-varying threshold
+  // before quantizing, producing a crosshatch pattern instead of flat posterisation.
+  bayer(levels: number): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const n = Math.max(2, Math.floor(levels));
+    const step = 255 / (n - 1);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const t = (GlitchBuffer.BAYER8[y & 7][x & 7] / 64 - 0.5) * step;
+        const base = (y * width + x) * 3;
+        for (let c = 0; c < 3; c++)
+          this.data[base + c] = clamp8(Math.round((this.data[base + c] + t) / step) * step);
+      }
+    }
+    return this;
+  }
+
+  // Floyd-Steinberg error diffusion dithering. Quantizes each pixel and spreads
+  // the rounding error to neighbouring pixels, producing organic dot patterns.
+  diffuse(levels: number): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const n = Math.max(2, Math.floor(levels));
+    const step = 255 / (n - 1);
+    for (let c = 0; c < 3; c++) {
+      const buf = new Float32Array(width * height);
+      for (let i = 0; i < width * height; i++) buf[i] = this.data[i * 3 + c];
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = y * width + x;
+          const quantized = clamp8(Math.round(buf[i] / step) * step);
+          const err = buf[i] - quantized;
+          buf[i] = quantized;
+          if (x + 1 < width)  buf[i + 1]         += err * 7 / 16;
+          if (y + 1 < height) {
+            if (x > 0)        buf[i + width - 1] += err * 3 / 16;
+                               buf[i + width]     += err * 5 / 16;
+            if (x + 1 < width) buf[i + width + 1] += err * 1 / 16;
+          }
+        }
+      }
+      for (let i = 0; i < width * height; i++) this.data[i * 3 + c] = clamp8(buf[i]);
+    }
+    return this;
+  }
+
   private luma(idx: number): number {
     return (this.data[idx * 3] * 77 + this.data[idx * 3 + 1] * 150 + this.data[idx * 3 + 2] * 29) >> 8;
   }
@@ -341,22 +426,6 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  // Sort pixels by luma within columns. Threshold sign works the same as sort.
-  sortvertical(threshold: Percentage): this {
-    const { width, height } = this;
-    if (!width || !height) return this;
-    const t = Math.abs(threshold) / 100 * 255;
-    const above = threshold >= 0;
-    for (let x = 0; x < width; x++) {
-      let run: number[] = [];
-      for (let y = 0; y <= height; y++) {
-        const idx = y * width + x;
-        const in_ = y < height && (above ? this.luma(idx) >= t : this.luma(idx) < t);
-        if (in_) { run.push(idx); } else { this.sortRun(run); run = []; }
-      }
-    }
-    return this;
-  }
 
   // Peak-follower smear: propagate the running maximum forward with exponential decay, per channel.
   // amount: smear length as % of pixel count; decay: fraction remaining at that distance (0 = no smear, 1 = hold forever).
@@ -377,6 +446,40 @@ export class GlitchBuffer implements IGlitchBuffer {
   // XOR every byte against a fixed value (0–255). xor 85 / xor 170 give structured bit patterns.
   xor(value: number): this {
     for (let i = 0; i < this.data.length; i++) this.data[i] ^= value;
+    return this;
+  }
+
+  // Stutter: pick random positions, grab a chunk, and repeat it forward.
+  // size: chunk length as % of buffer; count: number of stutters to apply.
+  stutter(size: Percentage, count: number): this {
+    const len = this.data.length;
+    const maxChunk = Math.max(1, pct(size, len));
+    for (let i = 0; i < count; i++) {
+      const chunkLen = Math.max(1, Math.floor(this.rand() * maxChunk));
+      const src = Math.floor(this.rand() * (len - chunkLen));
+      const chunk = this.data.slice(src, src + chunkLen);
+      const dst = Math.floor(this.rand() * (len - chunkLen));
+      for (let j = 0; j < chunkLen && dst + j < len; j++)
+        this.data[dst + j] = chunk[j % chunk.length];
+    }
+    return this;
+  }
+
+  // Transpose the pixel grid (swap width↔height), apply fn, then transpose back.
+  async transpose(fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
+    const { width: W, height: H } = this;
+    if (!W || !H) return this;
+    const flipped = new Uint8Array(this.data.length);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        for (let c = 0; c < 3; c++)
+          flipped[(x * H + y) * 3 + c] = this.data[(y * W + x) * 3 + c];
+    const sub = new GlitchBuffer(flipped, H, W, this.rand);
+    await fn(sub);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        for (let c = 0; c < 3; c++)
+          this.data[(y * W + x) * 3 + c] = sub.data[(x * H + y) * 3 + c];
     return this;
   }
 
@@ -440,18 +543,19 @@ export class GlitchBuffer implements IGlitchBuffer {
   }
 
   // Tone.js PitchShift — time-preserving pitch shift. semitones: e.g. -12 to 12.
-  async pitchShift(semitones: number): Promise<this> {
-    return this.toneProcess(0.5, () => new PitchShift(semitones)); // extra headroom for lookahead
+  // feedback: recirculates shifted signal back into input, adding a cascading resonance.
+  async pitchShift(semitones: number, feedback = 0): Promise<this> {
+    return this.toneProcess(0.5, () => new PitchShift({ pitch: semitones, feedback }));
   }
 
   // Tone.js Filter — biquad lowpass, highpass, bandpass.
   // frequency: cutoff/center Hz, Q: resonance (higher = sharper peak).
-  async lowpass(frequency: Frequency, Q: number): Promise<this> {
-    return this.toneProcess(0.1, () => new Filter({ type: 'lowpass', frequency, Q }));
+  async lowpass(frequency: Frequency, Q: number, rolloff = -12): Promise<this> {
+    return this.toneProcess(0.1, () => new Filter({ type: 'lowpass', frequency, Q, rolloff: rolloff as -12 | -24 | -48 | -96 }));
   }
 
-  async highpass(frequency: Frequency, Q: number): Promise<this> {
-    return this.toneProcess(0.1, () => new Filter({ type: 'highpass', frequency, Q }));
+  async highpass(frequency: Frequency, Q: number, rolloff = -12): Promise<this> {
+    return this.toneProcess(0.1, () => new Filter({ type: 'highpass', frequency, Q, rolloff: rolloff as -12 | -24 | -48 | -96 }));
   }
 
   async bandpass(frequency: Frequency, Q: number): Promise<this> {

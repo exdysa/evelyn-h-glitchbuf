@@ -4,11 +4,35 @@ all effects are available as glitchsp ops. click any effect badge in the editor 
 
 ---
 
+## byte effects
+
+operate on each byte independently.
+
+`bitcrush` `overdrive` `saturate` `invert` `quantize` `fold` `solarize` `xor`
+
+---
+
+## image effects
+
+operate on whole RGB pixels or 2D image structure.
+
+`sort` `smear` `chromashift` `rescale` / `resize` `jpeg` `bayer` `diffuse`
+
+---
+
+## buffer effects
+
+rearrange or modulate data across the buffer.
+
+`reverse` `copy` `noise` `echo` `shuffle` `stutter`
+
+---
+
 ## audio effects
 
-these treat pixel bytes as audio samples (mapped to -1..1), apply the effect, then map back.
+audio processing.
 
-`bitcrush` `noise` `echo` `reverb` `tremolo` `distort` `chorus` `pitchshift` `phaser` `freqshift` `vibrato` `chebyshev` `autowah` `feedbackdelay`
+`tremolo` `chorus` `reverb` `pitchshift` `phaser` `freqshift` `vibrato` `chebyshev` `autowah` `feedbackdelay`
 
 ---
 
@@ -17,19 +41,3 @@ these treat pixel bytes as audio samples (mapped to -1..1), apply the effect, th
 biquad filters treating the pixel buffer as an audio signal.
 
 `lowpass` `highpass` `bandpass` `lowshelf` `highshelf` `notch`
-
----
-
-## byte effects & transforms
-
-operate directly on the raw byte stream.
-
-`reverse` `copy` `invert` `quantize` `fold` `solarize` `xor`
-
----
-
-## pixel effects & transforms
-
-operate on whole RGB pixels or 2D image structure.
-
-`sort` `sortvertical` `smear` `shuffle` `transpose` `rescale` / `resize`

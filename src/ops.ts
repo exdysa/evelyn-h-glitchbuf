@@ -15,7 +15,7 @@ export interface ParamDef {
   optional?: true;
 }
 
-export const enum OpKind { audio = 'audio', byte = 'byte', pixel = 'pixel', image = 'image', filter = 'filter', wrap = 'wrap' }
+export const enum OpKind { byte = 'byte', image = 'image', buffer = 'buffer', audio = 'audio', filter = 'filter', wrap = 'wrap' }
 
 export interface OpDef {
   name: string;
@@ -34,18 +34,18 @@ export const OPS: OpDef[] = [
   },
 
   {
-    name: 'noise', desc: 'add random noise (amplitude in dB).', kind: OpKind.byte, params: [
-      { name: 'amount', type: ParamType.float, min: -24, max: 24, default: -12, step: 1, unit: 'dB', desc: 'amplitude in dB; e.g. -30 = subtle, -6 = heavy' },
+    name: 'noise', desc: 'add random noise (amplitude in dB).', kind: OpKind.buffer, params: [
+      { name: 'amount', type: ParamType.float, min: -48, max: 24, default: -12, step: 1, unit: 'dB', desc: 'amplitude in dB; e.g. -48 = barely perceptible, -6 = heavy' },
     ], invoke: (buf, amt) => buf.noise(amt as Decibels)
   },
 
   {
-    name: 'reverse', desc: 'reverse the pixel buffer.', kind: OpKind.audio, params: [],
+    name: 'reverse', desc: 'reverse the pixel buffer.', kind: OpKind.buffer, params: [],
     invoke: (buf) => buf.reverse()
   },
 
   {
-    name: 'echo', desc: 'delay-and-mix echo effect.', kind: OpKind.audio, params: [
+    name: 'echo', desc: 'delay-and-mix echo effect.', kind: OpKind.buffer, params: [
       { name: 'delay', type: ParamType.float, min: -100, max: 100, default: 20, step: 1, unit: '%', desc: 'delay length as % of buffer length' },
       { name: 'gain', type: ParamType.float, min: -32, max: 0, default: -12, step: 1, unit: 'dB', desc: 'echo amplitude in dB (negative = quieter)' },
     ], invoke: (buf, t, g) => buf.echo(t as Percentage, g as Decibels)
@@ -73,7 +73,14 @@ export const OPS: OpDef[] = [
   },
 
   {
-    name: 'copy', desc: 'copy a region to another position in the buffer.', kind: OpKind.audio, params: [
+    name: 'stutter', desc: 'randomly repeat small buffer chunks in place — cd-skip / buffer freeze effect.', kind: OpKind.buffer, params: [
+      { name: 'size', type: ParamType.log, min: 0.01, max: 50, default: 2, unit: '%', desc: 'chunk size as % of buffer length; smaller = tighter repeats' },
+      { name: 'count', type: ParamType.int, min: 1, max: 200, default: 20, step: 1, desc: 'number of stutters to apply; higher values cover more of the buffer' },
+    ], invoke: (buf, s, n) => buf.stutter(s as Percentage, n)
+  },
+
+  {
+    name: 'copy', desc: 'copy a region to another position in the buffer.', kind: OpKind.buffer, params: [
       { name: 'src', type: ParamType.float, min: 0, max: 100, default: 0, step: 1, unit: '%', desc: 'source region start (% of buffer)' },
       { name: 'end', type: ParamType.float, min: 0, max: 100, default: 50, step: 1, unit: '%', desc: 'source region end (% of buffer)' },
       { name: 'dst', type: ParamType.float, min: 0, max: 100, default: 50, step: 1, unit: '%', desc: 'destination start (% of buffer)' },
@@ -88,9 +95,15 @@ export const OPS: OpDef[] = [
   },
 
   {
-    name: 'distort', desc: 'tanh waveshaper distortion.', kind: OpKind.byte, params: [
+    name: 'overdrive', desc: 'hard-clip overdrive — amplify then clamp.', kind: OpKind.byte, params: [
+      { name: 'drive', type: ParamType.float, min: 1, max: 20, default: 3, step: 0.1, desc: 'amplification before clipping; low = subtle, high = everything crushed to 0 or 255' },
+    ], invoke: (buf, d) => buf.overdrive(d)
+  },
+
+  {
+    name: 'saturate', desc: 'tanh soft-clip saturation.', kind: OpKind.byte, params: [
       { name: 'drive', type: ParamType.float, min: 1, max: 10, default: 2, step: 0.1, desc: 'saturation amount (~1 = clean, ~10 = heavy crunch)' },
-    ], invoke: (buf, d) => buf.distort(d)
+    ], invoke: (buf, d) => buf.saturate(d)
   },
 
   {
@@ -102,13 +115,14 @@ export const OPS: OpDef[] = [
 
   {
     name: 'pitchshift', desc: 'shift pitch by semitones.', kind: OpKind.audio, params: [
-      { name: 'semitones', type: ParamType.float, min: -24, max: 24, default: 1, step: 0.1, desc: 'pitch shift amount in semitones' },
-    ], invoke: (buf, s) => buf.pitchShift(s)
+      { name: 'semitones', type: ParamType.log, min: -24, max: 24, default: 1, desc: 'pitch shift amount in semitones' },
+      { name: 'feedback', type: ParamType.float, min: 0, max: 0.95, default: 0, step: 0.01, desc: 'feeds shifted signal back into input — adds cascading resonance; high values get chaotic', optional: true },
+    ], invoke: (buf, s, fb) => buf.pitchShift(s, fb)
   },
 
   {
     name: 'phaser', desc: 'all-pass phaser effect.', kind: OpKind.audio, params: [
-      { name: 'freq', type: ParamType.log, min: 1, max: 2000, default: 10, unit: 'Hz', desc: 'LFO rate in Hz' },
+      { name: 'freq', type: ParamType.log, min: 0.1, max: 2000, default: 10, unit: 'Hz', desc: 'LFO rate in Hz' },
       { name: 'octaves', type: ParamType.float, min: 1, max: 12, default: 3, step: 1, desc: 'sweep width in octaves' },
       { name: 'base', type: ParamType.log, min: 1, max: 10000, default: 200, unit: 'Hz', desc: 'center frequency in Hz' },
     ], invoke: (buf, f, o, b) => buf.phaser(f as Frequency, o, b as Frequency)
@@ -149,19 +163,31 @@ export const OPS: OpDef[] = [
   },
 
   {
-    name: 'sort', desc: 'pixel-sort horizontally by brightness threshold.', kind: OpKind.pixel, params: [
+    name: 'jpeg', desc: 'jpeg compression artifacts — encode and decode at low quality.', kind: OpKind.image, params: [
+      { name: 'quality', type: ParamType.int, min: 1, max: 100, default: 20, step: 1, desc: 'jpeg quality (1–100); lower values produce heavier blocking and colour artifacts' },
+    ], invoke: (buf, q) => buf.jpeg(q)
+  },
+
+  {
+    name: 'bayer', desc: 'ordered dithering using an 8×8 Bayer threshold matrix.', kind: OpKind.image, params: [
+      { name: 'levels', type: ParamType.int, min: 2, max: 256, default: 4, step: 1, desc: 'number of quantisation levels per channel; lower values produce stronger crosshatch patterns' },
+    ], invoke: (buf, n) => buf.bayer(n)
+  },
+
+  {
+    name: 'diffuse', desc: 'Floyd-Steinberg error diffusion dithering.', kind: OpKind.image, params: [
+      { name: 'levels', type: ParamType.int, min: 2, max: 256, default: 4, step: 1, desc: 'number of quantisation levels per channel; lower values produce more pronounced dot patterns' },
+    ], invoke: (buf, n) => buf.diffuse(n)
+  },
+
+  {
+    name: 'sort', desc: 'pixel-sort horizontally by brightness threshold.', kind: OpKind.image, params: [
       { name: 'threshold', type: ParamType.float, min: 0, max: 100, default: 50, step: 1, unit: '%', desc: 'luma threshold; sorts runs of pixels brighter than threshold%' },
     ], invoke: (buf, t) => buf.sort(t as Percentage)
   },
 
   {
-    name: 'sortvertical', desc: 'pixel-sort vertically by brightness threshold.', kind: OpKind.pixel, params: [
-      { name: 'threshold', type: ParamType.float, min: 0, max: 100, default: 50, step: 1, unit: '%', desc: 'luma threshold; sorts columns brighter than threshold%' },
-    ], invoke: (buf, t) => buf.sortvertical(t as Percentage)
-  },
-
-  {
-    name: 'smear', desc: 'horizontal pixel smear / motion blur.', kind: OpKind.pixel, params: [
+    name: 'smear', desc: 'horizontal pixel smear / motion blur.', kind: OpKind.image, params: [
       { name: 'amount', type: ParamType.log, min: 0, max: 1, default: 0.1, step: 0.01, unit: '%', desc: 'smear length as fraction of pixel count' },
       { name: 'decay', type: ParamType.log, min: 0, max: 1, default: 0.1, step: 0.01, desc: 'peak value persistence (0 = no smear, 1 = hold forever)' },
     ], invoke: (buf, a, d) => buf.smear(a as Percentage, d)
@@ -174,11 +200,11 @@ export const OPS: OpDef[] = [
   },
 
   {
-    name: 'transpose', desc: 'shift one RGB channel by a pixel offset.', kind: OpKind.image, params: [
+    name: 'chromashift', desc: 'shift one RGB channel by a pixel offset (chromatic aberration).', kind: OpKind.image, params: [
       { name: 'ch', type: ParamType.int, min: 0, max: 2, default: 0, step: 1, desc: 'channel to shift (0=R, 1=G, 2=B)' },
       { name: 'dx', type: ParamType.float, min: -100, max: 100, default: 10, step: 0.1, unit: '%', desc: 'horizontal shift as % of image width (negative = left)' },
       { name: 'dy', type: ParamType.float, min: -100, max: 100, default: 10, step: 0.1, unit: '%', desc: 'vertical shift as % of image height (negative = up)' },
-    ], invoke: (buf, ch, dx, dy) => buf.transpose(ch, dx as Percentage, dy as Percentage)
+    ], invoke: (buf, ch, dx, dy) => buf.chromashift(ch, dx as Percentage, dy as Percentage)
   },
 
   {
@@ -187,7 +213,7 @@ export const OPS: OpDef[] = [
   },
 
   {
-    name: 'shuffle', desc: 'randomly swap a fraction of pixels.', kind: OpKind.pixel, params: [
+    name: 'shuffle', desc: 'randomly swap a fraction of pixels.', kind: OpKind.buffer, params: [
       { name: 'amount', type: ParamType.float, min: 0, max: 100, default: 50, step: 1, unit: '%', desc: 'fraction of pixels to swap; higher values approach full randomisation' },
     ], invoke: (buf, pct) => buf.shuffle(pct as Percentage)
   },
@@ -214,14 +240,16 @@ export const OPS: OpDef[] = [
     name: 'lowpass', desc: 'biquad low-pass filter — attenuates high-frequency byte patterns.', kind: OpKind.filter, params: [
       { name: 'freq', type: ParamType.log, min: 0, max: 20000, default: 1000, unit: 'Hz', desc: 'cutoff frequency in Hz; lower values produce a smoother, blurrier result' },
       { name: 'Q', type: ParamType.log, min: 0.1, max: 100, default: 1, desc: 'resonance at the cutoff; higher values add a ringing peak' },
-    ], invoke: (buf, f, q) => buf.lowpass(f as Frequency, q)
+      { name: 'rolloff', type: ParamType.int, min: 1, max: 4, default: 1, step: 1, desc: 'filter slope: 1 = -12dB/oct (gentle), 2 = -24, 3 = -48, 4 = -96dB/oct (steep)', optional: true },
+    ], invoke: (buf, f, q, r) => buf.lowpass(f as Frequency, q, r !== undefined ? [-12, -24, -48, -96][Math.round(r) - 1] : undefined)
   },
 
   {
     name: 'highpass', desc: 'biquad high-pass filter — attenuates low-frequency byte patterns.', kind: OpKind.filter, params: [
       { name: 'freq', type: ParamType.log, min: 0, max: 20000, default: 1000, unit: 'Hz', desc: 'cutoff frequency in Hz; higher values keep only sharp edges/transitions' },
       { name: 'Q', type: ParamType.log, min: 0.1, max: 100, default: 1, desc: 'resonance at the cutoff; higher values add a ringing peak' },
-    ], invoke: (buf, f, q) => buf.highpass(f as Frequency, q)
+      { name: 'rolloff', type: ParamType.int, min: 1, max: 4, default: 1, step: 1, desc: 'filter slope: 1 = -12dB/oct (gentle), 2 = -24, 3 = -48, 4 = -96dB/oct (steep)', optional: true },
+    ], invoke: (buf, f, q, r) => buf.highpass(f as Frequency, q, r !== undefined ? [-12, -24, -48, -96][Math.round(r) - 1] : undefined)
   },
 
   {
@@ -267,6 +295,11 @@ export const OPS: OpDef[] = [
     params: [
       { name: 'n', type: ParamType.int, min: 1, max: 12, default: 2, step: 1, desc: 'number of times to repeat the body' },
     ]
+  },
+  {
+    name: 'transpose', kind: OpKind.wrap,
+    desc: 'flip the pixel grid so ops apply top-to-bottom instead of left-to-right, then flip back.\nusage: (transpose body)',
+    params: []
   },
   {
     name: 'channel', kind: OpKind.wrap,

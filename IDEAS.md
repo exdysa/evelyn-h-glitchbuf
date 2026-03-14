@@ -4,21 +4,58 @@
   - something to get some solid blocks of color? lots of ways to break things now but not a ton to add new color/shapes
 
 ## 2d:
-  - dithering
-  - jpeg-ify
 
 ## other
   - any effects i can get easily from the canvas api?
     - see: https://glitchyimage.com/
   - see https://moshpro.app/ for inspiration
 
+### claude's ideas:
+byte
+  - gamma(g) — power curve per byte. g<1 brightens, g>1 darkens. One line of math, very useful
+  - threshold(level) — hard binarize: above → 255, below → 0. Brutal
+  - levels(black, white) — remap input range to 0–255, like Photoshop levels
+  - abs — fold negative (centered) byte values upward, like a half-wave rectifier
+
+buffer
+  - ringmod(freq) — multiply each byte by a sine wave at given frequency. Creates metallic, bell-like interference
+  patterns. Pure math, no Tone.js
+  - stutter(size, repeats) — grab small chunks and repeat them in place, like a CD skip or buffer freeze
+  - palindrome — replace second half of buffer with mirror of first half, creating symmetric artifacts
+
+image
+  - rowshift(amount) — shift each scanline row horizontally by a random offset. The classic glitch art look. Very
+  easy to implement
+  - mirror — flip image horizontally, vertically, or both
+  - pixelate(size) — average NxN blocks into flat colour. Classic mosaic
+  - scanlines(gap, darkness) — dim every nth row
+  - tile(n) — shrink image to 1/n and tile it n² times
+  - drift(amount) — shift rows by progressively increasing offsets, creating a cascading slide
+
+audio/filter
+  - bitreverse — reverse bits within each byte before/after audio processing. Weird aliasing
+  - allpass(freq) — Tone.js allpass filter, shifts phase without changing amplitude. Subtle but stacks interestingly
+
+wrappers
+  - scale(factor, body) — downscale, apply body, upscale back. Produces pixelated lo-fi artifacts then restores
+  size. Very cool
+  - checker(size, body) — apply body to alternating NxN blocks in a checkerboard pattern
+  - even(body) / odd(body) — apply to alternating rows only. Great for scanline-style effects
+  - luma(body) — extract luminance, apply body, recompose. Keeps colour intact while glitching brightness
+
+  totally out there
+  - huerotate(degrees) — rotate hue in HSV space. Requires RGB↔HSV conversion but very visually distinct from
+  everything else
+  - vortex(amount) — rotate each row by an amount proportional to distance from centre, creating a whirlpool
+  - kaleidoscope(sectors) — mirror into N radial sectors
+
+
+
 ## language constructs?
   - easy way to build your own effect (1d and 2d), taking in raw byte/pixel data and doing whatever you want with it
 
 
 # UI / features
-  - script in PNG metadata?
-    - neat but potentially a security issue
   - better error handling in the parsing
   - perhaps an op that allows the user to do infix mathametical operations? (like (calc 6 - (rand)\*3), instead of (- 6 (\* (rand) 3)))
   - scramble function - randomizes the current script layers

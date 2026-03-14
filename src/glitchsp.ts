@@ -207,6 +207,18 @@ export async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): P
     return buf.val;
   }
 
+  if (head === 'transpose') {
+    // (transpose body) — flip grid so ops apply top-bottom instead of left-right, then flip back
+    const body = rest[0];
+    const top = buf.val;
+    await top.transpose(async (sub) => {
+      buf.val = sub as IGlitchBuffer;
+      await evaluate(body, env, buf);
+    });
+    buf.val = top;
+    return buf.val;
+  }
+
   if (head === 'stride') {
     // (stride len skip body) — apply body to chunks of len (0–100), skipping skip chunks between each
     const chunkLen = Math.max(0.001, await evaluate(rest[0], env, buf) as number);

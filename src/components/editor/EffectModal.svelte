@@ -21,10 +21,10 @@
 
   const ADD_KIND_ORDER: OpKind[] = [
     OpKind.byte,
-    OpKind.pixel,
+    OpKind.image,
+    OpKind.buffer,
     OpKind.audio,
     OpKind.filter,
-    OpKind.image,
   ];
   const addOps = OPS.filter((op) => op.invoke && op.kind !== OpKind.wrap);
   const addOpsByKind = ADD_KIND_ORDER.map((kind) => ({
@@ -204,7 +204,7 @@
     {#each currentMeta.params as param, i (currentMeta.name + i)}
       {@const argNode = editParsed?.argNodes[i]}
       {@const startDisabled =
-        !!param.optional && !!editParsed && i >= editParsed.argNodes.length}
+        !!param.optional && (!editParsed || i >= editParsed.argNodes.length)}
       <ParamRow
         {param}
         {argNode}
