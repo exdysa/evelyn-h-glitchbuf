@@ -59,14 +59,7 @@ export const OPS: OpDef[] = [
   },
 
   {
-    name: 'rescale', desc: 'resize the image. omit height to preserve aspect ratio.', kind: OpKind.image, params: [
-      { name: 'width', type: ParamType.int, min: 64, max: 4096, default: 1024, step: 1, unit: 'px', desc: 'target width in pixels' },
-      { name: 'height', type: ParamType.int, min: 64, max: 4096, default: 1024, step: 1, unit: 'px', desc: 'target height in pixels (omit to preserve aspect ratio)', optional: true },
-    ], invoke: (buf, w, h) => buf.rescale(w, h)
-  },
-
-  {
-    name: 'resize', desc: 'resize the image. omit height to preserve aspect ratio. (alias for rescale)', kind: OpKind.image, params: [
+    name: 'resize', desc: 'resize the image. omit height to preserve aspect ratio.', kind: OpKind.image, params: [
       { name: 'width', type: ParamType.int, min: 64, max: 4096, default: 1024, step: 1, unit: 'px', desc: 'target width in pixels' },
       { name: 'height', type: ParamType.int, min: 64, max: 4096, default: 1024, step: 1, unit: 'px', desc: 'target height in pixels (omit to preserve aspect ratio)', optional: true },
     ], invoke: (buf, w, h) => buf.rescale(w, h)
@@ -295,6 +288,18 @@ export const OPS: OpDef[] = [
     params: [
       { name: 'n', type: ParamType.int, min: 1, max: 12, default: 2, step: 1, desc: 'number of times to repeat the body' },
     ]
+  },
+  {
+    name: 'scale', kind: OpKind.wrap,
+    desc: 'downscale, apply body, then upscale back — produces lo-fi pixel artifacts.\nusage: (scale factor body)',
+    params: [
+      { name: 'factor', type: ParamType.float, min: 0.05, max: 1, default: 0.25, step: 0.01, desc: 'scale factor (0.05–1); lower values produce blockier, more pixelated results' },
+    ]
+  },
+  {
+    name: 'luma', kind: OpKind.wrap,
+    desc: 'apply body to the luminance channel only, preserving colour.\nusage: (luma body)',
+    params: []
   },
   {
     name: 'transpose', kind: OpKind.wrap,

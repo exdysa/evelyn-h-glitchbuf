@@ -57,6 +57,8 @@ export interface IGlitchBuffer {
   fold(drive: number): this;
   solarize(threshold: number): this;
   stutter(size: Percentage, count: number): this;
+  scale(factor: number, fn: () => Promise<void>): Promise<this>;
+  luma(fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   channel(ch: number, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   transpose(fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   mix(wet: Wet, fn: (buf: IGlitchBuffer) => Promise<void>): Promise<this>;
@@ -394,13 +396,13 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  private luma(idx: number): number {
+  private lumaAt(idx: number): number {
     return (this.data[idx * 3] * 77 + this.data[idx * 3 + 1] * 150 + this.data[idx * 3 + 2] * 29) >> 8;
   }
 
   private sortRun(run: number[]): void {
     if (run.length < 2) return;
-    const px = run.map(i => ({ r: this.data[i * 3], g: this.data[i * 3 + 1], b: this.data[i * 3 + 2], l: this.luma(i) }));
+    const px = run.map(i => ({ r: this.data[i * 3], g: this.data[i * 3 + 1], b: this.data[i * 3 + 2], l: this.lumaAt(i)}));
     px.sort((a, b) => a.l - b.l);
     for (let k = 0; k < run.length; k++) {
       this.data[run[k] * 3] = px[k].r;
@@ -419,7 +421,7 @@ export class GlitchBuffer implements IGlitchBuffer {
       let run: number[] = [];
       for (let x = 0; x <= width; x++) {
         const idx = y * width + x;
-        const in_ = x < width && (above ? this.luma(idx) >= t : this.luma(idx) < t);
+        const in_ = x < width && (above ? this.lumaAt(idx) >= t : this.lumaAt(idx) < t);
         if (in_) { run.push(idx); } else { this.sortRun(run); run = []; }
       }
     }
@@ -446,6 +448,36 @@ export class GlitchBuffer implements IGlitchBuffer {
   // XOR every byte against a fixed value (0–255). xor 85 / xor 170 give structured bit patterns.
   xor(value: number): this {
     for (let i = 0; i < this.data.length; i++) this.data[i] ^= value;
+    return this;
+  }
+
+  // Downscale by factor, call fn, then upscale back to original dimensions.
+  async scale(factor: number, fn: () => Promise<void>): Promise<this> {
+    const origW = this.width, origH = this.height;
+    if (!origW || !origH) return this;
+    await this.rescale(Math.max(1, Math.round(origW * factor)), Math.max(1, Math.round(origH * factor)));
+    await fn();
+    await this.rescale(origW, origH);
+    return this;
+  }
+
+  // Extract luminance (Y from YCbCr), apply fn, then recompose with original chroma.
+  async luma(fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
+    const count = Math.floor(this.data.length / 3);
+    const Y = new Uint8Array(count), Cb = new Uint8Array(count), Cr = new Uint8Array(count);
+    for (let i = 0; i < count; i++) {
+      const r = this.data[i * 3], g = this.data[i * 3 + 1], b = this.data[i * 3 + 2];
+      Y[i]  = clamp8(0.299 * r + 0.587 * g + 0.114 * b);
+      Cb[i] = clamp8(128 - 0.168736 * r - 0.331264 * g + 0.5 * b);
+      Cr[i] = clamp8(128 + 0.5 * r - 0.418688 * g - 0.081312 * b);
+    }
+    await fn(new GlitchBuffer(Y, this.width, this.height, this.rand));
+    for (let i = 0; i < count; i++) {
+      const y = Y[i], cb = Cb[i] - 128, cr = Cr[i] - 128;
+      this.data[i * 3]     = clamp8(y + 1.402 * cr);
+      this.data[i * 3 + 1] = clamp8(y - 0.344136 * cb - 0.714136 * cr);
+      this.data[i * 3 + 2] = clamp8(y + 1.772 * cb);
+    }
     return this;
   }
 

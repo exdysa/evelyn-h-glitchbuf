@@ -237,6 +237,26 @@ export async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): P
     return buf.val;
   }
 
+  if (head === 'scale') {
+    // (scale factor body) — downscale, apply body, upscale back
+    const factor = await evaluate(rest[0], env, buf) as number;
+    const body = rest[1];
+    await buf.val.scale(factor, async () => { await evaluate(body, env, buf); });
+    return buf.val;
+  }
+
+  if (head === 'luma') {
+    // (luma body) — apply body to luminance only, preserving chroma
+    const body = rest[0];
+    const top = buf.val;
+    await top.luma(async (sub) => {
+      buf.val = sub as IGlitchBuffer;
+      await evaluate(body, env, buf);
+    });
+    buf.val = top;
+    return buf.val;
+  }
+
   if (head === 'mix') {
     // (mix wet body) — evaluate body, blend result with pre-body snapshot at wet ratio
     const wet = await evaluate(rest[0], env, buf) as Wet;

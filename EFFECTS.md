@@ -16,7 +16,7 @@ operate on each byte independently.
 
 operate on whole RGB pixels or 2D image structure.
 
-`sort` `smear` `chromashift` `rescale` / `resize` `jpeg` `bayer` `diffuse`
+`sort` `smear` `chromashift` `resize` `jpeg` `bayer` `diffuse`
 
 ---
 

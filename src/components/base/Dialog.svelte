@@ -1,7 +1,13 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import type { Snippet } from "svelte";
 
-  let { open, onclose, children, buttons, ...rest }: {
+  let {
+    open,
+    onclose,
+    children,
+    buttons,
+    ...rest
+  }: {
     open: boolean;
     onclose?: () => void;
     children: Snippet;
@@ -10,7 +16,10 @@
   } = $props();
 
   function modal(node: HTMLDialogElement) {
-    $effect(() => { if (open) node.showModal(); else if (node.open) node.close(); });
+    $effect(() => {
+      if (open) node.showModal();
+      else if (node.open) node.close();
+    });
   }
 </script>
 
@@ -40,5 +49,6 @@
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+    margin-top: 16px;
   }
 </style>

@@ -20,7 +20,6 @@ byte
 buffer
   - ringmod(freq) — multiply each byte by a sine wave at given frequency. Creates metallic, bell-like interference
   patterns. Pure math, no Tone.js
-  - stutter(size, repeats) — grab small chunks and repeat them in place, like a CD skip or buffer freeze
   - palindrome — replace second half of buffer with mirror of first half, creating symmetric artifacts
 
 image
@@ -41,7 +40,6 @@ wrappers
   size. Very cool
   - checker(size, body) — apply body to alternating NxN blocks in a checkerboard pattern
   - even(body) / odd(body) — apply to alternating rows only. Great for scanline-style effects
-  - luma(body) — extract luminance, apply body, recompose. Keeps colour intact while glitching brightness
 
   totally out there
   - huerotate(degrees) — rotate hue in HSV space. Requires RGB↔HSV conversion but very visually distinct from

@@ -46,10 +46,10 @@ stutter 3 20
 ` },
     {
         name: 'vhs', code: `\
+noise -18
 smear .008 0.05
 chromashift G 2 0
 chromashift B -1 0
-noise -32
 ` },
 
     {
