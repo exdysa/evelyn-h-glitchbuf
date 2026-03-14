@@ -28,9 +28,9 @@
     {/each}
   </div>
   <div id="help-content">{contents[activeTab]}</div>
-  <div class="buttons">
+  {#snippet buttons()}
     <button type="button" onclick={() => onclose(null)}>close</button>
-  </div>
+  {/snippet}
 </Dialog>
 
 <style>
@@ -80,9 +80,4 @@
     margin-bottom: var(--sp);
   }
 
-  .buttons {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-  }
 </style>

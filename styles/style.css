@@ -57,16 +57,28 @@ textarea {
   color: var(--fg);
 }
 
-/* single-line inputs and buttons share height */
+input[type="checkbox"],
+input[type="radio"] {
+  margin: 4px;
+}
+
+/* single-line inputs, selects, and buttons share height */
 input[type="text"],
+input[type="number"],
+select,
 button {
   border: 1px solid var(--border);
   padding: 4px 8px;
   line-height: 1.4;
 }
 
-input[type="text"] {
+input[type="text"],
+input[type="number"],
+select {
   background: var(--bg-input);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: var(--font-size);
 }
 
 button {
@@ -114,44 +126,6 @@ input[type="file"]::file-selector-button:hover {
 
 /* ── layout pieces ─────────────────────────────────────────────────────── */
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.field>label {
-  color: var(--fg-dim);
-  font-size: var(--label-size);
-}
-
-.script-field {
-  flex: 1;
-  min-height: 0;
-}
-
-.textarea-wrap {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-
-
-dialog {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  color: var(--fg);
-  font-family: var(--font);
-  font-size: var(--font-size);
-  padding: var(--sp);
-}
-
-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.55);
-}
-
 .file-seed-row {
   display: flex;
   gap: var(--sp);
@@ -163,22 +137,7 @@ dialog::backdrop {
   min-width: 0;
 }
 
-#add-effect-select,
-#wrap-select {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  color: var(--fg);
-  font-family: var(--font);
-  font-size: var(--font-size);
-  padding: 4px 8px;
-  line-height: 1.4;
-}
 
-.modal-buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
 
 @media (max-width: 768px) {
   body {
@@ -209,33 +168,4 @@ dialog::backdrop {
   }
 }
 
-/* ── effect dialog sizing ──────────────────────────────────────────────── */
 
-#effect-dialog { width: 380px; max-width: 90vw; }
-
-/* ── param accordion rows ──────────────────────────────────────────────── */
-
-.param-row { display: flex; flex-direction: column; margin-bottom: 6px; }
-/* grid: fixed chevron | shrink-to-fit label | all remaining space for controls */
-.param-header { display: grid; grid-template-columns: 14px auto 1fr; align-items: center; gap: 8px; }
-.param-chevron { cursor: pointer; color: var(--fg-dim); font-size: 10px; user-select: none; }
-.param-header > label { color: var(--fg-dim); font-size: var(--label-size); cursor: pointer; white-space: nowrap; }
-.param-controls { display: flex; gap: 6px; align-items: center; min-width: 0; }
-.param-controls input[type=range] { flex: 1; min-width: 0; }
-.param-controls input[type=number] { width: 52px; flex-shrink: 0; }
-.param-rand-preview { flex: 1; min-width: 0; font-family: var(--font); font-size: var(--font-size); color: var(--fg-dim); background: var(--bg-input); border: 1px solid var(--border); padding: 2px 4px; }
-
-/* ── expanded panel ────────────────────────────────────────────────────── */
-
-.param-expanded { margin-top: 4px; padding: 6px 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px; display: flex; flex-direction: column; gap: 6px; }
-.param-expanded[hidden] { display: none; }
-.param-desc { font-size: var(--label-size); color: var(--fg-dim); margin: 0; }
-.param-option { display: flex; align-items: center; gap: 6px; font-size: var(--label-size); color: var(--fg); cursor: pointer; }
-.param-rand-panel { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
-.param-rand-panel[hidden] { display: none; }
-.param-rand-type { display: flex; gap: 12px; font-size: var(--label-size); }
-.param-rand-inputs { display: flex; flex-direction: column; gap: 4px; }
-.param-rand-row { display: flex; align-items: center; gap: 6px; font-size: var(--label-size); color: var(--fg-dim); }
-.param-rand-row span { flex-shrink: 0; min-width: 28px; }
-.param-rand-row input[type=range] { flex: 1; min-width: 0; }
-.param-rand-row input[type=number] { width: 52px; flex-shrink: 0; }

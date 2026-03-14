@@ -17,40 +17,6 @@
 </head>
 
 <body>
-  <!-- Editor's native dialogs — referenced imperatively by editor.ts -->
-  <dialog id="effect-dialog" aria-modal="true">
-    <p id="effect-dialog-name"></p>
-    <p id="effect-dialog-desc"></p>
-    <div id="effect-dialog-params"></div>
-    <div class="modal-buttons">
-      <button id="effect-dialog-apply" type="button">apply</button>
-      <button id="effect-dialog-cancel" type="button">cancel</button>
-    </div>
-  </dialog>
-  <dialog id="add-effect-dialog" aria-modal="true">
-    <div class="add-effect-select-row">
-      <label for="add-effect-select">effect</label>
-      <select id="add-effect-select"></select>
-    </div>
-    <p id="add-effect-desc"></p>
-    <div id="add-effect-params"></div>
-    <div class="modal-buttons">
-      <button id="add-effect-apply" type="button">add</button>
-      <button id="add-effect-cancel" type="button">cancel</button>
-    </div>
-  </dialog>
-  <dialog id="wrap-dialog" aria-modal="true">
-    <div class="add-effect-select-row">
-      <label for="wrap-select">wrap with</label>
-      <select id="wrap-select"></select>
-    </div>
-    <p id="wrap-desc"></p>
-    <div id="wrap-params"></div>
-    <div class="modal-buttons">
-      <button id="wrap-apply" type="button">wrap</button>
-      <button id="wrap-cancel" type="button">cancel</button>
-    </div>
-  </dialog>
   <script type="module">
     import { mount } from 'svelte';
     import App from '/src/App.svelte';

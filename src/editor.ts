@@ -1,7 +1,8 @@
 import { parseBlock, splitIntoBlocks } from './glitchsp';
 import type { ParseNode } from './glitchsp';
-import { OPS, OP_MAP, OpKind, ParamType } from './ops';
+import { OP_MAP, ParamType } from './ops';
 import type { OpDef, ParamDef } from './ops';
+import type { EffectModalApi } from './components/editor/types';
 
 // ── Display tokenizer ─────────────────────────────────────────────────────────
 
@@ -126,21 +127,7 @@ function selectionCharOffsets(el: HTMLElement): { start: number; end: number } {
 
 let _editorLines: string[] = [''];
 let _editorEl: HTMLElement;
-let _effectDialog: HTMLDialogElement;
-let _dialogName: HTMLElement;
-let _dialogDesc: HTMLElement;
-let _dialogParams: HTMLElement;
-let _dialogApply: HTMLButtonElement;
-let _addDialog: HTMLDialogElement;
-let _addSelect: HTMLSelectElement;
-let _addDesc: HTMLParagraphElement;
-let _addParams: HTMLDivElement;
-let _addApplyBtn: HTMLButtonElement;
-let _wrapDialog: HTMLDialogElement;
-let _wrapSelect: HTMLSelectElement;
-let _wrapDesc: HTMLParagraphElement;
-let _wrapParams: HTMLDivElement;
-let _wrapApplyBtn: HTMLButtonElement;
+let _openModal: EffectModalApi | null = null;
 let _onChange: () => void;
 let _openHelp: ((tab: string) => void) | undefined;
 let _dragIndex: number | null = null;
@@ -343,221 +330,55 @@ function startScrub(
   span.addEventListener('pointerup', onUp);
 }
 
-// ── Effect modal ──────────────────────────────────────────────────────────────
+// ── Effect / add / wrap modal (delegated to EffectModal.svelte) ───────────────
 
-// Renders param rows into container. argNodes[j] is the parsed arg for param j
-// (undefined = use default). currentText is needed to display complex expressions verbatim.
-// Returns getArgs() which yields one formatted string per param (complex = verbatim expression).
-function renderParamInputs(
-  container: HTMLElement,
-  meta: OpDef,
-  argNodes: (ParseNode | undefined)[],
-  currentText?: string
-): () => string[] {
-  const inputs: HTMLInputElement[] = [];
-  const isComplex: boolean[] = [];
-
-  meta.params.forEach((param, j) => {
-    const row = document.createElement('div');
-    row.className = 'param-row';
-
-    const label = document.createElement('label');
-    label.textContent = param.unit ? `${param.name} (${param.unit})` : param.name;
-
-    const argNode = argNodes[j];
-    const isSimple = argNode?.kind === 'atom' && typeof argNode.value === 'number';
-    isComplex.push(!!argNode && !isSimple);
-
-    const parsed = isSimple ? (argNode as { value: number }).value : NaN;
-    const initVal = isNaN(parsed) ? param.default : Math.min(param.max, Math.max(param.min, parsed));
-
-    const isLog = param.type === ParamType.log;
-    const logMin = isLog ? sLog(param.min) : 0;
-    const logRange = isLog ? sLog(param.max) - logMin : 0;
-    const toSlider = (v: number) => isLog ? 100 * (sLog(v) - logMin) / logRange : v;
-    const fromSlider = (t: number) => isLog ? sExp(logMin + (t / 100) * logRange) : t;
-
-    const range = document.createElement('input');
-    range.type = 'range';
-    range.min = String(toSlider(param.min));
-    range.max = String(toSlider(param.max));
-    range.step = String(param.step ?? 1);
-    range.value = String(toSlider(initVal));
-    range.disabled = isComplex[j];
-
-    const num = document.createElement('input');
-    num.type = 'number';
-    num.min = String(param.min);
-    num.max = String(param.max);
-    num.step = String(param.step ?? 1);
-    num.value = isComplex[j] && currentText && argNode
-      ? currentText.slice(argNode.span.start, argNode.span.end)
-      : String(initVal);
-    num.disabled = isComplex[j];
-    if (isComplex[j]) num.title = 'complex expression — edit in source';
-
-    range.addEventListener('input', () => {
-      const v = fromSlider(parseFloat(range.value));
-      num.value = String(isLog ? parseFloat(v.toPrecision(3)) : v);
-    });
-    num.addEventListener('input', () => {
-      const v = parseFloat(num.value);
-      if (!isNaN(v)) range.value = String(toSlider(Math.min(param.max, Math.max(param.min, v))));
-    });
-
-    inputs.push(num);
-    row.append(label, range, num);
-    container.appendChild(row);
-  });
-
-  return () => inputs.map((inp, j) => {
-    if (isComplex[j] && currentText && argNodes[j]) {
-      return currentText.slice(argNodes[j]!.span.start, argNodes[j]!.span.end);
-    }
-    const v = parseFloat(inp.value);
-    return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString();
-  });
-}
-
+// Returns non-null if node is a (rand a b) or (randn a b) list with numeric args.
 function openEffectModal(
   meta: OpDef,
   currentText: string,
   lineIndex: number,
   exprRange?: { start: number; end: number }
 ): void {
-  _dialogName.textContent = meta.name;
-  _dialogDesc.textContent = meta.desc;
-  _dialogParams.innerHTML = '';
-
-  // Parse the block into an AST so we can inspect each arg's structure.
-  let listAst: Extract<ParseNode, { kind: 'list' }> | null = null;
-  try {
-    const ast = parseBlock(currentText);
-    listAst = ast.kind === 'list' ? ast : null;
-  } catch { /* malformed — inputs will show defaults */ }
-
-  // children[0] = op name, children[1..n] = args, children[n+1..] = body (special forms)
-  const argNodes = (listAst ? listAst.children.slice(1, 1 + meta.params.length) : []) as (ParseNode | undefined)[];
-  const isParenForm = listAst !== null && !listAst.bare;
-
-  const getArgs = renderParamInputs(_dialogParams, meta, argNodes, currentText);
-
-  _dialogApply.hidden = meta.params.length === 0;
-  _dialogApply.onclick = () => {
-    const args = getArgs();
-
-    // For special forms, preserve the body nodes verbatim using their spans.
-    const bodyNodes = listAst && !meta.invoke ? listAst.children.slice(1 + meta.params.length) : [];
-    const bodyParts = bodyNodes.map((n: ParseNode) => currentText.slice(n.span.start, n.span.end));
-
-    const inner = [meta.name, ...args, ...bodyParts].join(' ');
-    const newText = (isParenForm ? `(${inner})` : inner).trimEnd();
-
-    if (exprRange) {
-      _editorLines[lineIndex] =
-        _editorLines[lineIndex].slice(0, exprRange.start) +
-        newText +
-        _editorLines[lineIndex].slice(exprRange.end);
-    } else {
-      _editorLines[lineIndex] = newText;
-    }
-    renderEditor();
-    _onChange();
-    _effectDialog.close();
-  };
-
-  _effectDialog.showModal();
+  _openModal?.open({
+    kind: 'edit',
+    meta,
+    currentText,
+    onApply: (result) => {
+      if (exprRange) {
+        _editorLines[lineIndex] =
+          _editorLines[lineIndex].slice(0, exprRange.start) +
+          result +
+          _editorLines[lineIndex].slice(exprRange.end);
+      } else {
+        _editorLines[lineIndex] = result;
+      }
+      renderEditor();
+      _onChange();
+    },
+  });
 }
-
-const ADD_KIND_ORDER: OpKind[] = [OpKind.byte, OpKind.pixel, OpKind.audio, OpKind.image];
 
 function openAddEffectDialog(): void {
-  _addSelect.innerHTML = '';
-  for (const kind of ADD_KIND_ORDER) {
-    const ops = OPS.filter(op => op.invoke && op.kind === kind)
-      .sort((a, b) => a.name.localeCompare(b.name));
-    if (ops.length === 0) continue;
-    const group = document.createElement('optgroup');
-    group.label = kind;
-    for (const op of ops) {
-      const opt = document.createElement('option');
-      opt.value = op.name;
-      opt.textContent = op.name;
-      group.appendChild(opt);
-    }
-    _addSelect.appendChild(group);
-  }
-
-  let getArgs: () => string[] = () => [];
-
-  function updateForSelection(): void {
-    const meta = OP_MAP.get(_addSelect.value);
-    if (!meta) return;
-    _addDesc.textContent = meta.desc;
-    _addParams.innerHTML = '';
-    getArgs = renderParamInputs(_addParams, meta, []);
-  }
-
-  _addSelect.onchange = updateForSelection;
-  updateForSelection();
-
-  _addApplyBtn.onclick = () => {
-    const meta = OP_MAP.get(_addSelect.value);
-    if (!meta) return;
-    const block = [meta.name, ...getArgs()].join(' ').trimEnd();
-    _editorLines.push(block);
-    renderEditor();
-    _onChange();
-    _addDialog.close();
-  };
-
-  _addDialog.showModal();
+  _openModal?.open({
+    kind: 'add',
+    onApply: (block) => {
+      _editorLines.push(block);
+      renderEditor();
+      _onChange();
+    },
+  });
 }
 
-// ── Wrap dialog ───────────────────────────────────────────────────────────────
-
-const WRAP_OPS = OPS.filter(op => op.kind === OpKind.wrap);
-
 function openWrapDialog(lineIndex: number): void {
-  _wrapSelect.innerHTML = '';
-  for (const op of WRAP_OPS) {
-    const opt = document.createElement('option');
-    opt.value = op.name;
-    opt.textContent = op.name;
-    _wrapSelect.appendChild(opt);
-  }
-
-  let getArgs: () => string[] = () => [];
-
-  function updateForSelection(): void {
-    const meta = OP_MAP.get(_wrapSelect.value);
-    if (!meta) return;
-    _wrapDesc.textContent = meta.desc;
-    _wrapParams.innerHTML = '';
-    getArgs = renderParamInputs(_wrapParams, meta, []);
-  }
-
-  _wrapSelect.onchange = updateForSelection;
-  updateForSelection();
-
-  _wrapApplyBtn.onclick = () => {
-    const meta = OP_MAP.get(_wrapSelect.value);
-    if (!meta) return;
-    const original = _editorLines[lineIndex];
-    let bodyText: string;
-    try {
-      const ast = parseBlock(original);
-      bodyText = (ast.kind === 'list' && !ast.bare) ? original : `(${original})`;
-    } catch {
-      bodyText = `(${original})`;
-    }
-    _editorLines[lineIndex] = `(${meta.name} ${[...getArgs(), bodyText].join(' ')})`;
-    renderEditor();
-    _onChange();
-    _wrapDialog.close();
-  };
-
-  _wrapDialog.showModal();
+  _openModal?.open({
+    kind: 'wrap',
+    original: _editorLines[lineIndex],
+    onApply: (wrapped) => {
+      _editorLines[lineIndex] = wrapped;
+      renderEditor();
+      _onChange();
+    },
+  });
 }
 
 // ── Raw mode ──────────────────────────────────────────────────────────────────
@@ -911,44 +732,13 @@ function renderEditor(): void {
 export function initEditor(
   el: HTMLElement,
   onChange: () => void,
-  openHelp?: (tab: string) => void
+  openHelp?: (tab: string) => void,
+  modalApi?: EffectModalApi,
 ): void {
   _editorEl = el;
   _onChange = onChange;
   _openHelp = openHelp;
-  _effectDialog = document.getElementById('effect-dialog') as HTMLDialogElement;
-  _dialogName = document.getElementById('effect-dialog-name')!;
-  _dialogDesc = document.getElementById('effect-dialog-desc')!;
-  _dialogParams = document.getElementById('effect-dialog-params')!;
-  _dialogApply = document.getElementById('effect-dialog-apply') as HTMLButtonElement;
-  document.getElementById('effect-dialog-cancel')!
-    .addEventListener('click', () => _effectDialog.close());
-  _effectDialog.addEventListener('click', e => {
-    if (e.target === _effectDialog) _effectDialog.close();
-  });
-
-  _addDialog = document.getElementById('add-effect-dialog') as HTMLDialogElement;
-  _addSelect = document.getElementById('add-effect-select') as HTMLSelectElement;
-  _addDesc = document.getElementById('add-effect-desc') as HTMLParagraphElement;
-  _addParams = document.getElementById('add-effect-params') as HTMLDivElement;
-  _addApplyBtn = document.getElementById('add-effect-apply') as HTMLButtonElement;
-  document.getElementById('add-effect-cancel')!
-    .addEventListener('click', () => _addDialog.close());
-  _addDialog.addEventListener('click', e => {
-    if (e.target === _addDialog) _addDialog.close();
-  });
-
-  _wrapDialog = document.getElementById('wrap-dialog') as HTMLDialogElement;
-  _wrapSelect = document.getElementById('wrap-select') as HTMLSelectElement;
-  _wrapDesc = document.getElementById('wrap-desc') as HTMLParagraphElement;
-  _wrapParams = document.getElementById('wrap-params') as HTMLDivElement;
-  _wrapApplyBtn = document.getElementById('wrap-apply') as HTMLButtonElement;
-  document.getElementById('wrap-cancel')!
-    .addEventListener('click', () => _wrapDialog.close());
-  _wrapDialog.addEventListener('click', e => {
-    if (e.target === _wrapDialog) _wrapDialog.close();
-  });
-
+  _openModal = modalApi ?? null;
   renderEditor();
 }
 

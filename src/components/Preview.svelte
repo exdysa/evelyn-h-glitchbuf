@@ -223,6 +223,7 @@
     #canvas-pane {
       grid-column: 1;
       grid-row: auto;
+      order: 1;
       max-height: 50vh;
       min-height: 256px;
       padding-left: 0;

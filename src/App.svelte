@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { setAppContext, type AppCtx } from './context';
   import { initEditor, getScript as getEditorScript, setScript as setEditorScript } from './editor';
+  import EffectModal from './components/editor/EffectModal.svelte';
+  import type { EffectModalApi } from './components/editor/types';
   import { writePngMeta } from './png-meta';
   import { b64encode, b64decode } from './utils';
   import { openHelpDialog } from './components/dialogs';
@@ -11,6 +13,7 @@
   import SeedRow from './components/SeedRow.svelte';
   import PresetsRow from './components/PresetsRow.svelte';
   import FileInput from './components/FileInput.svelte';
+  import Field from './components/base/Field.svelte';
 
   // ── Global state ─────────────────────────────────────────────────────────────
 
@@ -24,6 +27,7 @@
 
   // Preview API registered via onready
   let preview: PreviewApi | null = null;
+  let modalApi: EffectModalApi | null = null;
 
   // ── Context methods ───────────────────────────────────────────────────────────
 
@@ -60,6 +64,7 @@
       document.getElementById('editor')!,
       () => { state.script = getEditorScript(); },
       openHelpDialog,
+      modalApi ?? undefined,
     );
     setEditorScript(state.script);
 
@@ -87,12 +92,11 @@
     <SeedRow />
   </div>
   <PresetsRow />
-  <div class="field script-field">
-    <label for="editor">script</label>
+  <Field label="script" for="editor" class="script-field">
     <div class="textarea-wrap">
       <div id="editor"></div>
     </div>
-  </div>
+  </Field>
   <div class="bottom-bar">
     <button type="button" onclick={() => openHelpDialog()}>help</button>
     <button type="button" onclick={() => ctx.download()}>download png</button>
@@ -103,8 +107,27 @@
     onready={(api) => { preview = api; }}
   />
 </div>
+<EffectModal onready={(api) => { modalApi = api; }} />
 
 <style>
+  /* .script-field and .textarea-wrap are on/inside Field's element, needs :global() */
+  :global(.script-field) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  @media (max-width: 768px) {
+    :global(.script-field) { order: 2; }
+    .bottom-bar { order: 3; }
+  }
+
+  .textarea-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
   .bottom-bar {
     display: flex;
     gap: 8px;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Prompt from '../base/Prompt.svelte';
+  import Field from '../base/Field.svelte';
 
   type Result = { name: string } | 'discard' | null;
   let { onclose }: { onclose: (result: Result) => void } = $props();
@@ -14,15 +15,14 @@
 <Prompt onclose={(r) => onclose(r as Result)}>
   {#snippet msg()}save current script as a preset before loading?{/snippet}
   {#snippet body()}
-    <div class="field">
-      <label for="preset-confirm-name">name</label>
+    <Field label="name" for="preset-confirm-name">
       <input
         id="preset-confirm-name"
         type="text"
         spellcheck="false"
         bind:value={name}
       />
-    </div>
+    </Field>
   {/snippet}
   {#snippet buttons({ done })}
     <!-- svelte-ignore a11y_autofocus -->
@@ -34,7 +34,5 @@
 </Prompt>
 
 <style>
-  .field { margin-bottom: 12px; }
-  .field input { width: 100%; }
   .spacer { flex: 1; }
 </style>

@@ -2,6 +2,7 @@
   import { getAppContext } from '../context';
   import { readPngMeta, type PngMeta } from '../png-meta';
   import { b64decode } from '../utils';
+  import Field from './base/Field.svelte';
 
   const ctx = getAppContext();
 
@@ -34,7 +35,6 @@
   }
 </script>
 
-<div class="field">
-  <label for="file">input image</label>
+<Field label="input image" for="file">
   <input type="file" id="file" accept="image/*" onchange={onFileChange} />
-</div>
+</Field>

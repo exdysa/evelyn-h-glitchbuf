@@ -4,7 +4,7 @@
 
   type Ctx = { done: (result: unknown) => void };
 
-  let { msg, body, buttons, onclose, ...rest }: {
+  let { msg, body, buttons: renderButtons, onclose, ...rest }: {
     msg?: Snippet;
     body?: Snippet<[Ctx]>;
     buttons: Snippet<[Ctx]>;
@@ -20,10 +20,11 @@
 <Dialog open={true} onclose={() => done(null)} {...rest}>
   {#if msg}<p class="msg">{@render msg()}</p>{/if}
   {#if body}{@render body({ done })}{/if}
-  <div class="buttons">{@render buttons({ done })}</div>
+  {#snippet buttons()}
+    {@render renderButtons({ done })}
+  {/snippet}
 </Dialog>
 
 <style>
   .msg { margin: 0 0 12px; }
-  .buttons { display: flex; gap: 8px; justify-content: flex-end; }
 </style>

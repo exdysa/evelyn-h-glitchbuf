@@ -1,10 +1,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  let { open, onclose, children, ...rest }: {
+  let { open, onclose, children, buttons, ...rest }: {
     open: boolean;
     onclose?: () => void;
     children: Snippet;
+    buttons?: Snippet;
     [key: string]: unknown;
   } = $props();
 
@@ -15,6 +16,9 @@
 
 <dialog use:modal onclose={() => onclose?.()} aria-modal="true" {...rest}>
   {@render children()}
+  {#if buttons}
+    <div class="buttons">{@render buttons()}</div>
+  {/if}
 </dialog>
 
 <style>
@@ -30,5 +34,11 @@
 
   dialog::backdrop {
     background: rgba(0, 0, 0, 0.55);
+  }
+
+  .buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
   }
 </style>

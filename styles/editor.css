@@ -96,51 +96,6 @@
   line-height: 1.5;
 }
 
-/* ── Effect param modal ────────────────────────────────────────────────────── */
-
-#effect-dialog {
-  min-width: 20rem;
-  max-width: min(32rem, 90vw);
-}
-
-#effect-dialog-name {
-  font-weight: bold;
-  margin: 0 0 4px;
-}
-
-#effect-dialog-desc {
-  color: var(--fg-dim);
-  margin: 0 0 12px;
-  white-space: pre-line;
-}
-
-.param-row {
-  display: grid;
-  grid-template-columns: 6rem 1fr 4rem;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.param-row label {
-  color: var(--fg-dim);
-  font-size: var(--label-size);
-}
-
-.param-row input[type=range] {
-  accent-color: var(--fg);
-}
-
-.param-row input[type=number] {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  padding: 2px 4px;
-  /* make sure the inc/dec buttons are flush with edge */
-  padding-right: 0px;
-  width: 100%;
-  text-align: left;
-}
-
 /* ── Add effect button ─────────────────────────────────────────────────────── */
 
 .add-effect-btn {
