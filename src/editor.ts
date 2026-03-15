@@ -7,7 +7,11 @@ import type { EffectModalApi } from './components/editor/types';
 // ── Display tokenizer ─────────────────────────────────────────────────────────
 
 type TokType = 'effect' | 'num' | 'paren' | 'comment' | 'plain';
-interface Tok { type: TokType; text: string; offset: number; }
+interface Tok {
+  type: TokType;
+  text: string;
+  offset: number;
+}
 
 function tokenizeForDisplay(block: string): Tok[] {
   const toks: Tok[] = [];
@@ -102,7 +106,9 @@ function findExprBounds(block: string, effectOffset: number): { start: number; e
     };
     const found = findDeepest(ast, effectOffset);
     if (found) return found.span;
-  } catch { /* malformed — fall through */ }
+  } catch {
+    /* malformed — fall through */
+  }
   return { start: effectOffset, end: block.length };
 }
 
@@ -130,7 +136,6 @@ let _editorEl: HTMLElement;
 let _openModal: EffectModalApi | null = null;
 let _onChange: () => void;
 let _onCommit: () => void;
-let _openHelp: ((tab: string) => void) | undefined;
 let _dragIndex: number | null = null;
 let _dropIndex: number | null = null;
 let _dropTarget: HTMLElement | null = null; // the current drag-over .editor-line element
@@ -160,7 +165,10 @@ function setCaretOffset(el: HTMLElement, offset: number): void {
     return false;
   };
   walk(el);
-  if (!placed) { range.selectNodeContents(el); range.collapse(false); }
+  if (!placed) {
+    range.selectNodeContents(el);
+    range.collapse(false);
+  }
   const sel = window.getSelection()!;
   sel.removeAllRanges();
   sel.addRange(range);
@@ -182,7 +190,9 @@ function placeCaretAtEnd(el: HTMLElement): void {
 
 function placeCaretAtPoint(el: HTMLElement, x: number, y: number): void {
   let placed = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (typeof (document as any).caretRangeFromPoint === 'function') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r: Range = (document as any).caretRangeFromPoint(x, y);
     if (r && el.contains(r.startContainer)) {
       const sel = window.getSelection()!;
@@ -190,7 +200,9 @@ function placeCaretAtPoint(el: HTMLElement, x: number, y: number): void {
       sel.addRange(r);
       placed = true;
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } else if (typeof (document as any).caretPositionFromPoint === 'function') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pos = (document as any).caretPositionFromPoint(x, y);
     if (pos && el.contains(pos.offsetNode)) {
       const range = document.createRange();
@@ -260,7 +272,9 @@ function findParamAtOffset(block: string, offset: number): ParamDef | null {
       return null;
     };
     return search(ast);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function startScrub(
@@ -286,9 +300,10 @@ function startScrub(
   const scale = abs >= 100 ? 1 : abs >= 1 ? 0.1 : 0.01;
   // For log params: 768px sweeps the full log range.
   const logScale = isLog ? (sLog(param!.max) - sLog(param!.min)) / 768 : 0;
-  const decimals = step !== undefined
-    ? (String(step).split('.')[1] ?? '').length
-    : (origText.split('.')[1] ?? '').length;
+  const decimals =
+    step !== undefined
+      ? (String(step).split('.')[1] ?? '').length
+      : (origText.split('.')[1] ?? '').length;
 
   const startX = e.clientX;
   let moved = false;
@@ -397,13 +412,20 @@ function enterRawMode(): void {
   _editorEl.appendChild(ta);
   ta.focus();
   ta.select();
-  ta.addEventListener('blur', () => {
-    setScript(ta.value);
-    _onChange();
-    _onCommit();
-  }, { once: true });
+  ta.addEventListener(
+    'blur',
+    () => {
+      setScript(ta.value);
+      _onChange();
+      _onCommit();
+    },
+    { once: true }
+  );
   ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); ta.blur(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      ta.blur();
+    }
   });
 }
 
@@ -429,14 +451,15 @@ function attachBlockHandlers(
 
   handle.addEventListener('pointermove', (e) => {
     if (_dragIndex === null) return;
-    const target = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)
-      ?.closest('.editor-line, .drop-sentinel') as HTMLElement | null;
+    const target = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest(
+      '.editor-line, .drop-sentinel'
+    ) as HTMLElement | null;
     const newDrop = target ? parseInt(target.dataset.index!) : _dropIndex;
     if (newDrop !== _dropIndex) {
       // Update drag-over only on the changed element rather than querying all lines.
       _dropTarget?.classList.remove('drag-over');
       _dropIndex = newDrop;
-      _dropTarget = (_dropIndex !== null && _dropIndex !== _dragIndex) ? target : null;
+      _dropTarget = _dropIndex !== null && _dropIndex !== _dragIndex ? target : null;
       _dropTarget?.classList.add('drag-over');
     }
   });
@@ -498,7 +521,9 @@ function attachBlockHandlers(
   });
 
   // If the pointer leaves without a pointerup, discard the pending effect click.
-  displayEl.addEventListener('pointercancel', () => { pendingEffectClick = null; });
+  displayEl.addEventListener('pointercancel', () => {
+    pendingEffectClick = null;
+  });
 
   // Tab / Enter on display (keyboard access without clicking)
   displayEl.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -619,26 +644,39 @@ function attachBlockHandlers(
 
       // Save cursor position as (line index, column) and get selection range.
       const { start: startChar, end: endChar } = selectionCharOffsets(editEl);
-      let cursorLine = 0, cursorCol = 0, pos = 0;
+      let cursorLine = 0,
+        cursorCol = 0,
+        pos = 0;
       for (let li = 0; li < lines.length; li++) {
         const lineEnd = pos + lines[li].length;
-        if (startChar <= lineEnd) { cursorLine = li; cursorCol = startChar - pos; break; }
+        if (startChar <= lineEnd) {
+          cursorLine = li;
+          cursorCol = startChar - pos;
+          break;
+        }
         pos = lineEnd + 1;
       }
 
       // Determine which lines are touched by the current selection.
-      let firstLine = 0, lastLine = lines.length - 1;
+      let firstLine = 0,
+        lastLine = lines.length - 1;
       pos = 0;
       let foundFirst = false;
       for (let li = 0; li < lines.length; li++) {
         const lineEnd = pos + lines[li].length;
-        if (!foundFirst && startChar <= lineEnd) { firstLine = li; foundFirst = true; }
-        if (endChar <= lineEnd) { lastLine = li; break; }
+        if (!foundFirst && startChar <= lineEnd) {
+          firstLine = li;
+          foundFirst = true;
+        }
+        if (endChar <= lineEnd) {
+          lastLine = li;
+          break;
+        }
         if (li === lines.length - 1) lastLine = li;
         pos = lineEnd + 1;
       }
 
-      const allCommented = lines.slice(firstLine, lastLine + 1).every(l => /^#/.test(l));
+      const allCommented = lines.slice(firstLine, lastLine + 1).every((l) => /^#/.test(l));
       const newLines = lines.map((l, idx) => {
         if (idx < firstLine || idx > lastLine) return l;
         return allCommented ? l.replace(/^#\s?/, '') : '# ' + l;
@@ -689,8 +727,12 @@ function renderEditor(): void {
     wrapBtn.className = 'wrap-btn';
     wrapBtn.textContent = '()';
     wrapBtn.title = 'wrap in a special form';
-    wrapBtn.addEventListener('pointerdown', () => { _suppressBlur = true; });
-    wrapBtn.addEventListener('pointerup', () => { _suppressBlur = false; });
+    wrapBtn.addEventListener('pointerdown', () => {
+      _suppressBlur = true;
+    });
+    wrapBtn.addEventListener('pointerup', () => {
+      _suppressBlur = false;
+    });
     wrapBtn.addEventListener('click', () => openWrapDialog(i));
 
     const lineWrap = document.createElement('div');
@@ -712,8 +754,12 @@ function renderEditor(): void {
     deleteBtn.className = 'delete-line-btn';
     deleteBtn.textContent = '×';
     deleteBtn.title = 'remove this block';
-    deleteBtn.addEventListener('pointerdown', () => { _suppressBlur = true; });
-    deleteBtn.addEventListener('pointerup', () => { _suppressBlur = false; });
+    deleteBtn.addEventListener('pointerdown', () => {
+      _suppressBlur = true;
+    });
+    deleteBtn.addEventListener('pointerup', () => {
+      _suppressBlur = false;
+    });
     deleteBtn.addEventListener('click', () => {
       _editorLines.splice(i, 1);
       if (_editorLines.length === 0) _editorLines = [''];
@@ -749,13 +795,11 @@ export function initEditor(
   el: HTMLElement,
   onChange: () => void,
   onCommit: () => void,
-  openHelp?: (tab: string) => void,
-  modalApi?: EffectModalApi,
+  modalApi?: EffectModalApi
 ): void {
   _editorEl = el;
   _onChange = onChange;
   _onCommit = onCommit;
-  _openHelp = openHelp;
   _openModal = modalApi ?? null;
   renderEditor();
 }
@@ -765,7 +809,7 @@ export function getScript(): string {
 }
 
 export function setScript(code: string): void {
-  const blocks = splitIntoBlocks(code).filter(b => b.trim().length > 0);
+  const blocks = splitIntoBlocks(code).filter((b) => b.trim().length > 0);
   // Always keep at least one block so the editor has an editable line.
   _editorLines = blocks.length > 0 ? blocks : [''];
   renderEditor();

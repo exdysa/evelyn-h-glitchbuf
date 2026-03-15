@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { untrack } from "svelte";
-  import type { ParseNode } from "../../glitchsp";
-  import type { ParamDef } from "../../ops";
-  import { makeParamScale } from "./param-math";
-  import ParamSlider from "./ParamSlider.svelte";
-  import RandPanel from "./RandPanel.svelte";
+  import { untrack } from 'svelte';
+  import type { ParseNode } from '../../glitchsp';
+  import type { ParamDef } from '../../ops';
+  import { makeParamScale } from './param-math';
+  import ParamSlider from './ParamSlider.svelte';
+  import RandPanel from './RandPanel.svelte';
 
   let {
     param,
@@ -30,44 +30,44 @@
   // (rand max) → a=0, b=max   (rand min max) → a=min, b=max
   // (randn std) → a=0, b=std  (randn mean std) → a=mean, b=std
   function parseRand(
-    node: ParseNode | undefined,
-  ): { fn: "rand" | "randn"; a: number; b: number } | null {
-    if (!node || node.kind !== "list") return null;
+    node: ParseNode | undefined
+  ): { fn: 'rand' | 'randn'; a: number; b: number } | null {
+    if (!node || node.kind !== 'list') return null;
     const len = node.children.length;
     if (len < 2 || len > 3) return null;
     const [head, arg1, arg2] = node.children;
-    if (head.kind !== "atom" || typeof head.value !== "string") return null;
-    if (head.value !== "rand" && head.value !== "randn") return null;
-    if (arg1.kind !== "atom" || typeof arg1.value !== "number") return null;
+    if (head.kind !== 'atom' || typeof head.value !== 'string') return null;
+    if (head.value !== 'rand' && head.value !== 'randn') return null;
+    if (arg1.kind !== 'atom' || typeof arg1.value !== 'number') return null;
     if (len === 2) {
       // single-arg: implicit a=0, parsed value is b
-      return { fn: head.value as "rand" | "randn", a: 0, b: arg1.value };
+      return { fn: head.value as 'rand' | 'randn', a: 0, b: arg1.value };
     }
-    if (arg2.kind !== "atom" || typeof arg2.value !== "number") return null;
-    return { fn: head.value as "rand" | "randn", a: arg1.value, b: arg2.value };
+    if (arg2.kind !== 'atom' || typeof arg2.value !== 'number') return null;
+    return { fn: head.value as 'rand' | 'randn', a: arg1.value, b: arg2.value };
   }
 
   // untrack: these read props once at mount to set up internal state.
   // argNode / param / startDisabled do not change for a given ParamRow instance.
   const { randInfo, initMode, initVal, initRandA, initRandB } = untrack(() => {
     const randInfo = parseRand(argNode);
-    const isSimple =
-      !randInfo &&
-      argNode?.kind === "atom" &&
-      typeof (argNode as any).value === "number";
-    const parsedNum = isSimple ? ((argNode as any).value as number) : NaN;
+    const parsedNum =
+      !randInfo && argNode?.kind === 'atom' && typeof argNode.value === 'number'
+        ? argNode.value
+        : NaN;
+    const isSimple = !isNaN(parsedNum);
     const initVal = isNaN(parsedNum)
       ? param.default
       : Math.min(param.max, Math.max(param.min, parsedNum));
 
-    type Mode = "slider" | "rand" | "complex" | "disabled";
+    type Mode = 'slider' | 'rand' | 'complex' | 'disabled';
     const initMode: Mode = startDisabled
-      ? "disabled"
+      ? 'disabled'
       : randInfo
-        ? "rand"
+        ? 'rand'
         : argNode && !isSimple
-          ? "complex"
-          : "slider";
+          ? 'complex'
+          : 'slider';
 
     return {
       randInfo,
@@ -80,10 +80,10 @@
 
   // ── Internal state ────────────────────────────────────────────────────────
 
-  type Mode = "slider" | "rand" | "complex" | "disabled";
+  type Mode = 'slider' | 'rand' | 'complex' | 'disabled';
   let mode: Mode = $state(initMode);
   let sliderValue = $state(initVal);
-  let randFn: "rand" | "randn" = $state(randInfo?.fn ?? "rand");
+  let randFn: 'rand' | 'randn' = $state(randInfo?.fn ?? 'rand');
   let randA = $state(initRandA);
   let randB = $state(initRandB);
 
@@ -92,16 +92,15 @@
   const complexText = $derived(
     argNode && currentText
       ? currentText.slice(argNode.span.start, argNode.span.end)
-      : scale.fmt(param.default),
+      : scale.fmt(param.default)
   );
 
   // ── Derived output value ──────────────────────────────────────────────────
 
   const currentValue: string | null = $derived.by(() => {
-    if (mode === "disabled") return null;
-    if (mode === "complex") return complexText;
-    if (mode === "rand")
-      return `(${randFn} ${scale.fmt(randA)} ${scale.fmt(randB)})`;
+    if (mode === 'disabled') return null;
+    if (mode === 'complex') return complexText;
+    if (mode === 'rand') return `(${randFn} ${scale.fmt(randA)} ${scale.fmt(randB)})`;
     return scale.fmt(sliderValue);
   });
 
@@ -109,9 +108,7 @@
     onchange?.(currentValue);
   });
 
-  const headerLabel = $derived(
-    param.unit ? `${param.name} [${param.unit}]` : param.name,
-  );
+  const headerLabel = $derived(param.unit ? `${param.name} [${param.unit}]` : param.name);
 </script>
 
 <div class="param-row">
@@ -121,8 +118,7 @@
       role="button"
       tabindex="-1"
       onclick={ontoggle}
-      onkeydown={(e) => e.key === "Enter" && ontoggle()}
-      >{expanded ? "▼" : "▶"}</span
+      onkeydown={(e) => e.key === 'Enter' && ontoggle()}>{expanded ? '▼' : '▶'}</span
     >
     <span
       class="param-label"
@@ -130,22 +126,13 @@
       onclick={ontoggle}
       role="button"
       tabindex="-1"
-      onkeydown={(e) => e.key === "Enter" && ontoggle?.()}>{headerLabel}</span
+      onkeydown={(e) => e.key === 'Enter' && ontoggle?.()}>{headerLabel}</span
     >
     <div class="param-controls">
-      {#if mode === "slider" || mode === "disabled"}
-        <ParamSlider
-          {param}
-          bind:value={sliderValue}
-          disabled={mode === "disabled"}
-        />
+      {#if mode === 'slider' || mode === 'disabled'}
+        <ParamSlider {param} bind:value={sliderValue} disabled={mode === 'disabled'} />
       {:else}
-        <input
-          type="text"
-          disabled
-          class="param-rand-preview"
-          value={currentValue ?? ""}
-        />
+        <input type="text" disabled class="param-rand-preview" value={currentValue ?? ''} />
       {/if}
     </div>
   </div>
@@ -158,31 +145,31 @@
         <label class="param-option">
           <input
             type="checkbox"
-            checked={mode === "disabled"}
-            disabled={mode === "rand"}
+            checked={mode === 'disabled'}
+            disabled={mode === 'rand'}
             onchange={(e) => {
-              mode = e.currentTarget.checked ? "disabled" : "slider";
+              mode = e.currentTarget.checked ? 'disabled' : 'slider';
             }}
           />
           disable (use default)
         </label>
       {/if}
 
-      {#if mode !== "complex"}
+      {#if mode !== 'complex'}
         <label class="param-option">
           <input
             type="checkbox"
-            checked={mode === "rand"}
-            disabled={mode === "disabled"}
+            checked={mode === 'rand'}
+            disabled={mode === 'disabled'}
             onchange={(e) => {
-              mode = e.currentTarget.checked ? "rand" : "slider";
+              mode = e.currentTarget.checked ? 'rand' : 'slider';
             }}
           />
           randomize
         </label>
       {/if}
 
-      {#if mode === "rand"}
+      {#if mode === 'rand'}
         <div class="param-rand-panel">
           <RandPanel {param} bind:fn={randFn} bind:a={randA} bind:b={randB} />
         </div>
@@ -229,11 +216,11 @@
   }
 
   /* ParamSlider renders these inputs, so :global() is needed */
-  .param-controls :global(input[type="range"]) {
+  .param-controls :global(input[type='range']) {
     flex: 1;
     min-width: 0;
   }
-  .param-controls :global(input[type="number"]) {
+  .param-controls :global(input[type='number']) {
     width: 5rem;
     flex-shrink: 0;
   }

@@ -1,25 +1,16 @@
 <script lang="ts">
-  import { getAppContext } from "../context";
-  import {
-    BUILT_IN_PRESETS,
-    loadUserPresets,
-    saveUserPresets,
-    type Preset,
-  } from "../presets";
-  import {
-    openSavePresetDialog,
-    openDeletePresetDialog,
-    openPresetConfirmModal,
-  } from "./dialogs";
-  import type { PresetConfirmResult } from "./dialogs";
-  import Field from "./base/Field.svelte";
-  import Button from "./base/Button.svelte";
+  import { getAppContext } from '../context';
+  import { BUILT_IN_PRESETS, loadUserPresets, saveUserPresets, type Preset } from '../presets';
+  import { openSavePresetDialog, openDeletePresetDialog, openPresetConfirmModal } from './dialogs';
+  import type { PresetConfirmResult } from './dialogs';
+  import Field from './base/Field.svelte';
+  import Button from './base/Button.svelte';
 
   const ctx = getAppContext();
 
   let userPresets: Preset[] = $state(loadUserPresets());
-  let selectedValue = $state("");
-  let currentSelectValue = "";
+  let selectedValue = $state('');
+  let currentSelectValue = '';
   // Track the script as it was when last loaded from a preset (or on init).
   // If the user edits the script since then, we prompt before loading another.
   let lastLoadedCode = ctx.state.script;
@@ -27,8 +18,8 @@
   // Deselect preset whenever the script diverges from what was loaded.
   $effect(() => {
     if (ctx.state.script !== lastLoadedCode) {
-      selectedValue = "";
-      currentSelectValue = "";
+      selectedValue = '';
+      currentSelectValue = '';
     }
   });
 
@@ -49,7 +40,7 @@
   async function onSelectChange(): Promise<void> {
     const val = selectedValue;
     if (!val) {
-      currentSelectValue = "";
+      currentSelectValue = '';
       return;
     }
 
@@ -59,15 +50,14 @@
         selectedValue = currentSelectValue;
         return;
       }
-      if (typeof result === "object" && result.name)
-        saveCurrentAsPreset(result.name, val);
+      if (typeof result === 'object' && result.name) saveCurrentAsPreset(result.name, val);
     }
 
     let code: string | undefined;
-    if (val.startsWith("builtin:")) {
-      code = BUILT_IN_PRESETS.find((p) => "builtin:" + p.name === val)?.code;
-    } else if (val.startsWith("user:")) {
-      code = userPresets.find((p) => "user:" + p.name === val)?.code;
+    if (val.startsWith('builtin:')) {
+      code = BUILT_IN_PRESETS.find((p) => 'builtin:' + p.name === val)?.code;
+    } else if (val.startsWith('user:')) {
+      code = userPresets.find((p) => 'user:' + p.name === val)?.code;
     }
     if (code !== undefined) {
       ctx.pushHistory();
@@ -80,18 +70,18 @@
   async function onSave(): Promise<void> {
     const name = await openSavePresetDialog();
     if (!name) return;
-    saveCurrentAsPreset(name, "user:" + name);
+    saveCurrentAsPreset(name, 'user:' + name);
     lastLoadedCode = ctx.state.script;
   }
 
   async function onDelete(): Promise<void> {
-    if (!selectedValue.startsWith("user:")) return;
-    const name = selectedValue.slice("user:".length);
+    if (!selectedValue.startsWith('user:')) return;
+    const name = selectedValue.slice('user:'.length);
     if (!(await openDeletePresetDialog(name))) return;
     userPresets = userPresets.filter((p) => p.name !== name);
     saveUserPresets(userPresets);
-    selectedValue = "";
-    currentSelectValue = "";
+    selectedValue = '';
+    currentSelectValue = '';
   }
 </script>
 
@@ -100,13 +90,13 @@
     <select id="presets" bind:value={selectedValue} onchange={onSelectChange}>
       <option value="">— select preset —</option>
       <optgroup label="built-in">
-        {#each BUILT_IN_PRESETS as p}
+        {#each BUILT_IN_PRESETS as p (p.name)}
           <option value="builtin:{p.name}">{p.name}</option>
         {/each}
       </optgroup>
       {#if userPresets.length > 0}
         <optgroup label="saved">
-          {#each userPresets as p}
+          {#each userPresets as p (p.name)}
             <option value="user:{p.name}">{p.name}</option>
           {/each}
         </optgroup>
@@ -114,7 +104,7 @@
     </select>
   </Field>
   <Button onclick={onSave}>save</Button>
-  <Button disabled={!selectedValue.startsWith("user:")} onclick={onDelete}>delete</Button>
+  <Button disabled={!selectedValue.startsWith('user:')} onclick={onDelete}>delete</Button>
 </div>
 
 <style>

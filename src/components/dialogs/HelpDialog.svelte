@@ -7,24 +7,30 @@
 
   const tabs = ['app', 'language', 'effects'] as const;
   type Tab = (typeof tabs)[number];
-  const contents: Record<Tab, string> = { app: HELP_MD, language: GLITCHSP_MD, effects: EFFECTS_MD };
+  const contents: Record<Tab, string> = {
+    app: HELP_MD,
+    language: GLITCHSP_MD,
+    effects: EFFECTS_MD,
+  };
 
   let { tab = '', onclose }: { tab?: string; onclose: (result: null) => void } = $props();
 
   // tab is only meaningful at creation time (dialog is mounted fresh each call)
-  let activeTab = $state<Tab>(untrack(() => tab && tab in contents ? tab as Tab : 'app'));
+  let activeTab = $state<Tab>(untrack(() => (tab && tab in contents ? (tab as Tab) : 'app')));
 </script>
 
 <Dialog open={true} onclose={() => onclose(null)} id="help-dialog" aria-label="help">
   <div class="help-tabs" role="tablist">
-    {#each tabs as t}
+    {#each tabs as t (t)}
       <button
         class="help-tab"
         class:active={activeTab === t}
         data-tab={t}
         role="tab"
-        onclick={() => { activeTab = t; }}
-      >{t}</button>
+        onclick={() => {
+          activeTab = t;
+        }}>{t}</button
+      >
     {/each}
   </div>
   <div id="help-content">{contents[activeTab]}</div>
@@ -79,5 +85,4 @@
     line-height: 1.5;
     margin-bottom: var(--sp);
   }
-
 </style>

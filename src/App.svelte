@@ -18,7 +18,8 @@
   // ── Global state ─────────────────────────────────────────────────────────────
 
   const _initParams = new URLSearchParams(location.search);
-  const initialSeed = _initParams.get('seed') ?? String(Math.floor(Math.random() * 0x100000000) >>> 0);
+  const initialSeed =
+    _initParams.get('seed') ?? String(Math.floor(Math.random() * 0x100000000) >>> 0);
   const initialScript = _initParams.has('script')
     ? b64decode(_initParams.get('script')!)
     : BUILT_IN_PRESETS[0].code;
@@ -50,7 +51,12 @@
     async download() {
       const blobs = await preview?.getBlobs();
       if (!blobs) return;
-      const enriched = await writePngMeta(blobs.output, state.seed, b64encode(state.script), blobs.orig);
+      const enriched = await writePngMeta(
+        blobs.output,
+        state.seed,
+        b64encode(state.script),
+        blobs.orig
+      );
       const url = URL.createObjectURL(enriched);
       const a = document.createElement('a');
       a.href = url;
@@ -67,10 +73,13 @@
   onMount(() => {
     initEditor(
       document.getElementById('editor')!,
-      () => { state.script = getEditorScript(); },
-      () => { ctx.pushHistory(); },
-      openHelpDialog,
-      modalApi ?? undefined,
+      () => {
+        state.script = getEditorScript();
+      },
+      () => {
+        ctx.pushHistory();
+      },
+      modalApi ?? undefined
     );
     setEditorScript(state.script);
 
@@ -110,10 +119,16 @@
   <Preview
     seed={state.seed}
     script={state.script}
-    onready={(api) => { preview = api; }}
+    onready={(api) => {
+      preview = api;
+    }}
   />
 </div>
-<EffectModal onready={(api) => { modalApi = api; }} />
+<EffectModal
+  onready={(api) => {
+    modalApi = api;
+  }}
+/>
 
 <style>
   /* .script-field and .textarea-wrap are on/inside Field's element, needs :global() */
@@ -123,8 +138,12 @@
   }
 
   @media (max-width: 768px) {
-    :global(.script-field) { order: 2; }
-    .bottom-bar { order: 3; }
+    :global(.script-field) {
+      order: 2;
+    }
+    .bottom-bar {
+      order: 3;
+    }
   }
 
   .textarea-wrap {

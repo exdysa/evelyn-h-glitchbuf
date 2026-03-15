@@ -8,10 +8,9 @@ export type PresetConfirmResult = { name: string } | 'discard' | null;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function showDialog<T>(Component: any, props: Record<string, unknown> = {}): Promise<T> {
-  return new Promise<T>(resolve => {
+  return new Promise<T>((resolve) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let instance: any;
-    instance = mount(Component, {
+    const instance: any = mount(Component, {
       target: document.body,
       props: {
         ...props,

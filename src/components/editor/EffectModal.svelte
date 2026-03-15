@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { OPS, OP_MAP, OpKind } from "../../ops";
-  import type { OpDef } from "../../ops";
-  import { parseBlock } from "../../glitchsp";
-  import type { ParseNode } from "../../glitchsp";
-  import Dialog from "../base/Dialog.svelte";
-  import ParamRow from "./ParamRow.svelte";
-  import type { EffectModalApi, EffectModalOpts } from "./types";
+  import { onMount } from 'svelte';
+  import { OPS, OP_MAP, OpKind } from '../../ops';
+  import type { OpDef } from '../../ops';
+  import { parseBlock } from '../../glitchsp';
+  import type { ParseNode } from '../../glitchsp';
+  import Dialog from '../base/Dialog.svelte';
+  import ParamRow from './ParamRow.svelte';
+  import type { EffectModalApi, EffectModalOpts } from './types';
 
   let { onready }: { onready: (api: EffectModalApi) => void } = $props();
 
@@ -14,7 +14,7 @@
 
   let isOpen = $state(false);
   let opts: EffectModalOpts | null = $state(null);
-  let selectedOpName = $state("");
+  let selectedOpName = $state('');
   let paramValues: (string | null)[] = $state([]);
 
   // ── Op lists ──────────────────────────────────────────────────────────────
@@ -37,31 +37,26 @@
 
   const currentMeta = $derived.by((): OpDef | null => {
     if (!opts) return null;
-    if (opts.kind === "edit") return opts.meta;
+    if (opts.kind === 'edit') return opts.meta;
     return OP_MAP.get(selectedOpName) ?? null;
   });
 
   // For 'edit': parse currentText once into argNodes, isParenForm, bodyParts.
   const editParsed = $derived.by(() => {
-    if (opts?.kind !== "edit") return null;
+    if (opts?.kind !== 'edit') return null;
     try {
       const ast = parseBlock(opts.currentText);
-      if (ast.kind !== "list")
+      if (ast.kind !== 'list')
         return {
           argNodes: [] as (ParseNode | undefined)[],
           isParenForm: false,
           bodyParts: [] as string[],
         };
       const meta = opts.meta;
-      const argNodes = ast.children.slice(1, 1 + meta.params.length) as (
-        | ParseNode
-        | undefined
-      )[];
-      const bodyNodes = !meta.invoke
-        ? ast.children.slice(1 + meta.params.length)
-        : [];
+      const argNodes = ast.children.slice(1, 1 + meta.params.length) as (ParseNode | undefined)[];
+      const bodyNodes = !meta.invoke ? ast.children.slice(1 + meta.params.length) : [];
       const bodyParts = bodyNodes.map((n: ParseNode) =>
-        opts.currentText.slice(n.span.start, n.span.end),
+        opts.currentText.slice(n.span.start, n.span.end)
       );
       return { argNodes, isParenForm: !ast.bare, bodyParts };
     } catch {
@@ -81,47 +76,42 @@
     while (last > 0 && args[last - 1] === null) last--;
     // substitute defaults for intermediate nulls so later optional params
     // don't get misinterpreted as earlier ones
-    return args
-      .slice(0, last)
-      .map((a, i) => a ?? String(currentMeta!.params[i].default));
+    return args.slice(0, last).map((a, i) => a ?? String(currentMeta!.params[i].default));
   }
 
   function buildResult(): string | null {
     if (!opts || !currentMeta) return null;
     const args = trimArgs(paramValues);
 
-    if (opts.kind === "edit") {
+    if (opts.kind === 'edit') {
       const { isParenForm, bodyParts } = editParsed ?? {
         isParenForm: true,
         bodyParts: [],
       };
-      const inner = [currentMeta.name, ...args, ...bodyParts].join(" ");
+      const inner = [currentMeta.name, ...args, ...bodyParts].join(' ');
       return (isParenForm ? `(${inner})` : inner).trimEnd();
     }
 
-    if (opts.kind === "add") {
-      return [currentMeta.name, ...args].join(" ").trimEnd();
+    if (opts.kind === 'add') {
+      return [currentMeta.name, ...args].join(' ').trimEnd();
     }
 
-    if (opts.kind === "wrap") {
+    if (opts.kind === 'wrap') {
       let bodyText: string;
       try {
         const ast = parseBlock(opts.original);
-        bodyText =
-          ast.kind === "list" && !ast.bare
-            ? opts.original
-            : `(${opts.original})`;
+        bodyText = ast.kind === 'list' && !ast.bare ? opts.original : `(${opts.original})`;
       } catch {
         bodyText = `(${opts.original})`;
       }
-      return `(${[currentMeta.name, ...args, bodyText].join(" ")})`;
+      return `(${[currentMeta.name, ...args, bodyText].join(' ')})`;
     }
 
     return null;
   }
 
   function maybeLivePreview() {
-    if (opts?.kind !== "edit" || !opts.onLivePreview) return;
+    if (opts?.kind !== 'edit' || !opts.onLivePreview) return;
     const result = buildResult();
     if (result !== null) opts.onLivePreview(result);
   }
@@ -142,8 +132,8 @@
 
   function open(newOpts: EffectModalOpts) {
     opts = newOpts;
-    if (newOpts.kind === "add") selectedOpName = addOps[0]?.name ?? "";
-    else if (newOpts.kind === "wrap") selectedOpName = wrapOps[0]?.name ?? "";
+    if (newOpts.kind === 'add') selectedOpName = addOps[0]?.name ?? '';
+    else if (newOpts.kind === 'wrap') selectedOpName = wrapOps[0]?.name ?? '';
     paramValues = (currentMeta?.params ?? []).map(() => null);
     isOpen = true;
   }
@@ -153,13 +143,11 @@
   }
 
   const applyLabel = $derived(
-    opts?.kind === "add" ? "add" : opts?.kind === "wrap" ? "wrap" : "apply",
+    opts?.kind === 'add' ? 'add' : opts?.kind === 'wrap' ? 'wrap' : 'apply'
   );
 
   // hide apply only when editing a 0-param effect (just an info popup)
-  const showApply = $derived(
-    opts?.kind !== "edit" || (currentMeta?.params.length ?? 0) > 0,
-  );
+  const showApply = $derived(opts?.kind !== 'edit' || (currentMeta?.params.length ?? 0) > 0);
 
   onMount(() => {
     onready({ open });
@@ -175,29 +163,23 @@
   }}
 >
   {#if opts && currentMeta}
-    {#if opts.kind === "edit"}
+    {#if opts.kind === 'edit'}
       <p class="effect-name">{currentMeta.name}</p>
       <p class="effect-desc">{currentMeta.desc}</p>
     {:else}
       <div class="select-row">
-        <label for="effect-modal-select"
-          >{opts.kind === "wrap" ? "wrap with" : "effect"}</label
-        >
-        <select
-          id="effect-modal-select"
-          bind:value={selectedOpName}
-          onchange={onSelectChange}
-        >
-          {#if opts.kind === "add"}
-            {#each addOpsByKind as group}
+        <label for="effect-modal-select">{opts.kind === 'wrap' ? 'wrap with' : 'effect'}</label>
+        <select id="effect-modal-select" bind:value={selectedOpName} onchange={onSelectChange}>
+          {#if opts.kind === 'add'}
+            {#each addOpsByKind as group (group.kind)}
               <optgroup label={group.kind}>
-                {#each group.ops as op}
+                {#each group.ops as op (op.name)}
                   <option value={op.name}>{op.name}</option>
                 {/each}
               </optgroup>
             {/each}
           {:else}
-            {#each wrapOps as op}
+            {#each wrapOps as op (op.name)}
               <option value={op.name}>{op.name}</option>
             {/each}
           {/if}
@@ -208,12 +190,11 @@
 
     {#each currentMeta.params as param, i (currentMeta.name + i)}
       {@const argNode = editParsed?.argNodes[i]}
-      {@const startDisabled =
-        !!param.optional && (!editParsed || i >= editParsed.argNodes.length)}
+      {@const startDisabled = !!param.optional && (!editParsed || i >= editParsed.argNodes.length)}
       <ParamRow
         {param}
         {argNode}
-        currentText={opts.kind === "edit" ? opts.currentText : undefined}
+        currentText={opts.kind === 'edit' ? opts.currentText : undefined}
         {startDisabled}
         onchange={(v) => {
           paramValues[i] = v;
