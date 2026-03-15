@@ -124,9 +124,11 @@ function parseAtom(token: string): GlitchVal {
 
 export class GlitchEnv {
   private map = new Map<string, GlitchVal>();
+  private computed = new Map<string, () => GlitchVal>();
   constructor(private parent?: GlitchEnv) { }
 
   get(name: string): GlitchVal {
+    if (this.computed.has(name)) return this.computed.get(name)!();
     if (this.map.has(name)) return this.map.get(name)!;
     if (this.parent) return this.parent.get(name);
     throw new Error(`Undefined: ${name}`);
@@ -134,6 +136,10 @@ export class GlitchEnv {
 
   set(name: string, val: GlitchVal): void {
     this.map.set(name, val);
+  }
+
+  setComputed(name: string, fn: () => GlitchVal): void {
+    this.computed.set(name, fn);
   }
 }
 
@@ -301,6 +307,10 @@ export function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
     }
   }
 
+  // buffer dimensions — read dynamically so they reflect the current sub-buffer
+  env.setComputed('width', () => buf.val.width);
+  env.setComputed('height', () => buf.val.height);
+
   // channel constants
   env.set('R', 0); env.set('G', 1); env.set('B', 2);
 
@@ -329,6 +339,16 @@ export function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
       return min + rand() * (max - min);
     }
     return args.length === 1 ? rand() * (args[0] as number) : rand();
+  });
+
+  // integer random — same signature as rand but floors to integer
+  // (randint max) → 0–max-1, (randint min max) → min–max-1
+  env.set('randint', (...args: GlitchVal[]): GlitchVal => {
+    if (args.length >= 2) {
+      const min = args[0] as number, max = args[1] as number;
+      return Math.floor(min + rand() * (max - min));
+    }
+    return Math.floor(rand() * (args[0] as number));
   });
 
   // normal distribution via Box-Muller — uses seeded PRNG

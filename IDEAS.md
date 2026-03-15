@@ -11,42 +11,11 @@
   - see https://moshpro.app/ for inspiration
 
 ### claude's ideas:
-byte
-  - gamma(g) — power curve per byte. g<1 brightens, g>1 darkens. One line of math, very useful
-  - threshold(level) — hard binarize: above → 255, below → 0. Brutal
-  - levels(black, white) — remap input range to 0–255, like Photoshop levels
-  - abs — fold negative (centered) byte values upward, like a half-wave rectifier
-
-buffer
-  - ringmod(freq) — multiply each byte by a sine wave at given frequency. Creates metallic, bell-like interference
-  patterns. Pure math, no Tone.js
-  - palindrome — replace second half of buffer with mirror of first half, creating symmetric artifacts
-
-image
-  - rowshift(amount) — shift each scanline row horizontally by a random offset. The classic glitch art look. Very
-  easy to implement
-  - mirror — flip image horizontally, vertically, or both
-  - pixelate(size) — average NxN blocks into flat colour. Classic mosaic
-  - scanlines(gap, darkness) — dim every nth row
-  - tile(n) — shrink image to 1/n and tile it n² times
-  - drift(amount) — shift rows by progressively increasing offsets, creating a cascading slide
-
-audio/filter
-  - bitreverse — reverse bits within each byte before/after audio processing. Weird aliasing
-  - allpass(freq) — Tone.js allpass filter, shifts phase without changing amplitude. Subtle but stacks interestingly
-
-wrappers
-  - scale(factor, body) — downscale, apply body, upscale back. Produces pixelated lo-fi artifacts then restores
-  size. Very cool
-  - checker(size, body) — apply body to alternating NxN blocks in a checkerboard pattern
-  - even(body) / odd(body) — apply to alternating rows only. Great for scanline-style effects
-
-  totally out there
+totally out there
   - huerotate(degrees) — rotate hue in HSV space. Requires RGB↔HSV conversion but very visually distinct from
   everything else
   - vortex(amount) — rotate each row by an amount proportional to distance from centre, creating a whirlpool
   - kaleidoscope(sectors) — mirror into N radial sectors
-
 
 
 ## language constructs?
@@ -59,8 +28,10 @@ wrappers
   - scramble function - randomizes the current script layers
   - toggle layer function - switches the layer effect on/off by double-clicking the handle, maybe also a global on-off so that one can admire their destruction
   - for wrapped effects, add a `...` button after the effect that lets you add another effect wrapped in a `do` block. this would make it easier to have chains of effects in a wrapped block, which is often desireable.
+  - auto warning/help when rendering is slow that lets the user easily insert a rescale to make the image smaller
 
 ## todo
+  - lut optimization: byte effects with a fixed param (bitcrush, saturate, overdrive, fold, solarize, quantize, invert) should precompute a 256-entry lookup table instead of calling the transform per-byte — same fix already applied to gamma
   - feedback form (and perhaps donation page? if i wanna be bold)
   - add back button or something to undo/go back in browser histroy
     - currently the fact that browser history saves state before loading a preset is too opaque
@@ -69,7 +40,12 @@ wrappers
   - add more optional params (default to null) for audio effects where appropriate
   - hover tooltips on params in code editor
   - tile effects editor at the bottom of editor rather than modal (keep as modal for mobile?)
+  - split copy pasted code into blocks if needed
+  - color param type with radio buttons
 
+## bugs
+  - deleting lines with the button doesn't clear the preset selection
+  - can't drag a line below the last line
 
 ## ui redesign for mobile (and less confusing desktop)
  - image loading / downloading

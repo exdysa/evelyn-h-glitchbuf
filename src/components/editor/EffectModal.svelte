@@ -21,8 +21,8 @@
 
   const ADD_KIND_ORDER: OpKind[] = [
     OpKind.byte,
-    OpKind.image,
     OpKind.buffer,
+    OpKind.image,
     OpKind.audio,
     OpKind.filter,
   ];
@@ -76,9 +76,14 @@
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function trimArgs(args: (string | null)[]): string[] {
+    if (!currentMeta) return [];
     let last = args.length;
     while (last > 0 && args[last - 1] === null) last--;
-    return args.slice(0, last).map((a) => a ?? "");
+    // substitute defaults for intermediate nulls so later optional params
+    // don't get misinterpreted as earlier ones
+    return args
+      .slice(0, last)
+      .map((a, i) => a ?? String(currentMeta!.params[i].default));
   }
 
   function buildResult(): string | null {

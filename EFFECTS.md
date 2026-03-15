@@ -8,7 +8,7 @@ all effects are available as glitchsp ops. click any effect badge in the editor 
 
 operate on each byte independently.
 
-`bitcrush` `overdrive` `saturate` `invert` `quantize` `fold` `solarize` `xor`
+`bitcrush` `overdrive` `saturate` `gamma` `levels` `bitrot` `invert` `quantize` `fold` `solarize` `xor`
 
 ---
 
@@ -16,7 +16,7 @@ operate on each byte independently.
 
 operate on whole RGB pixels or 2D image structure.
 
-`sort` `smear` `chromashift` `resize` `jpeg` `bayer` `diffuse`
+`sort` `smear` `chromashift` `blur` `defocus` `warp` `pixelate` `polar` `flip` `mirror` `displace` `tunnel` `vignette` `resize` `maxsize` `jpeg` `bayer` `diffuse`
 
 ---
 
@@ -24,7 +24,7 @@ operate on whole RGB pixels or 2D image structure.
 
 rearrange or modulate data across the buffer.
 
-`reverse` `copy` `noise` `echo` `shuffle` `stutter`
+`reverse` `copy` `noise` `echo` `shuffle` `stutter` `resample`
 
 ---
 

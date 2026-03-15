@@ -25,6 +25,7 @@ export interface IGlitchBuffer {
   echo(delay: Percentage, gainDb: Decibels): this;
   reverb(roomSize: number, dampening: Frequency): Promise<this>;
   rescale(newWidth: number, newHeight?: number): Promise<this>;
+  maxsize(px: number): Promise<this>;
   select(start: Percentage, end: Percentage, fn: (sub: IGlitchBuffer) => Promise<void>): Promise<this>;
   copy(srcStart: Percentage, srcEnd: Percentage, dstStart: Percentage): this;
   tremolo(rate: number, depth: number): this;
@@ -50,9 +51,23 @@ export interface IGlitchBuffer {
   sort(threshold: Percentage): this;
   smear(amount: Percentage, decay: number): this;
   xor(value: number): this;
+  gamma(g: number): this;
+  levels(black: number, white: number): this;
+  bitrot(prob: number): this;
+  resample(factor: number): this;
   invert(): this;
   shuffle(amount: Percentage): this;
   chromashift(ch: number, dx: Percentage, dy: Percentage): this;
+  warp(amount: number): this;
+  blur(radius: number): this;
+  defocus(radius: number): this;
+  pixelate(size: number): this;
+  polar(): this;
+  flip(): this;
+  mirror(): this;
+  displace(amount: Percentage): this;
+  tunnel(n: number, zoom: number, decay: number, angle?: number, offsetX?: number, offsetY?: number): this;
+  vignette(strength: number, softness?: number, size?: number): this;
   quantize(levels: number): this;
   fold(drive: number): this;
   solarize(threshold: number): this;
@@ -118,6 +133,7 @@ export class GlitchBuffer implements IGlitchBuffer {
     this.rand = rand;
   }
 
+
   async select(start: Percentage, end: Percentage, fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
     const len = this.data.length;
     if (start > end) { const t = start; start = end; end = t; }
@@ -143,6 +159,14 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
+  // Resize only if the longest dimension exceeds px — no-ops on smaller images.
+  async maxsize(px: number): Promise<this> {
+    const longest = Math.max(this.width, this.height);
+    if (longest <= px) return this;
+    const scale = px / longest;
+    return this.rescale(Math.round(this.width * scale), Math.round(this.height * scale));
+  }
+
   // Shared pipeline for all Tone.js effects: bytes↔floats + Offline render.
   // buildFx is called inside the Offline context and must return an unconnected Tone node.
   private async toneProcess(extraDuration: number, buildFx: () => any): Promise<this> {
@@ -165,7 +189,7 @@ export class GlitchBuffer implements IGlitchBuffer {
     }, duration + extraDuration);
 
     const out = rendered.getChannelData(0);
-    for (let i = 0; i < len; i++) this.data[i] = clamp8((out[i] + 1) * 127.5);
+    for (let i = 0; i < len; i++) this.data[i] = clamp8(((out[i] ?? 0) + 1) * 127.5);
 
     return this;
   }
@@ -216,12 +240,15 @@ export class GlitchBuffer implements IGlitchBuffer {
   }
 
   // Sinusoidal amplitude modulation. rate = oscillation count across buffer.
-  // depth 0–1: how deeply the LFO dips (0 = no effect, 1 = full tremolo).
+  // depth>0: troughs lerp toward black; depth<0: troughs lerp toward white.
   tremolo(rate: number, depth: number): this {
     const len = this.data.length;
     for (let i = 0; i < len; i++) {
-      const lfo = 1 - depth * 0.5 * (1 - Math.sin(2 * Math.PI * rate * i / len));
-      this.data[i] = clamp8((this.data[i] - 127.5) * lfo + 127.5);
+      const t = 0.5 * (1 - Math.sin(2 * Math.PI * rate * i / len)); // 0 at peak, 1 at trough
+      const v = this.data[i];
+      this.data[i] = depth >= 0
+        ? clamp8(v * (1 - depth * t))
+        : clamp8(v + (255 - v) * (-depth) * t);
     }
     return this;
   }
@@ -280,7 +307,326 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  // amount: 0–100 percentage of total pixels to swap. Swaps whole RGB pixels.
+  // Barrel (amount>0) or pincushion (amount<0) lens distortion.
+  // For barrel, scale compensates so corners map exactly to the source edge (no black fill).
+  warp(amount: number): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const src = new Uint8Array(this.data);
+    const cx = width / 2, cy = height / 2;
+    // Edge midpoints have r²=1 in normalised space; scale ensures they map exactly to ±1.
+    const scale = amount > 0 ? 1 / (1 + amount) : 1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const nx = (x - cx) / cx, ny = (y - cy) / cy;
+        const r2 = nx * nx + ny * ny;
+        const distort = (1 + amount * r2) * scale;
+        const sx = Math.round(nx * distort * cx + cx);
+        const sy = Math.round(ny * distort * cy + cy);
+        const di = (y * width + x) * 3;
+        if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
+          const si = (sy * width + sx) * 3;
+          this.data[di] = src[si]; this.data[di + 1] = src[si + 1]; this.data[di + 2] = src[si + 2];
+        } else {
+          this.data[di] = this.data[di + 1] = this.data[di + 2] = 0;
+        }
+      }
+    }
+    return this;
+  }
+
+  // Gaussian blur approximated by 3 passes of sliding-window box blur.
+  // O(w×h) per pass regardless of radius. Stride is derived from data length so
+  // it works correctly inside luma (1 channel) and normal RGB buffers (3 channels).
+  blur(radius: number): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const r = Math.max(1, Math.round(radius));
+    const ch = 3;
+    const tmp  = new Float32Array(this.data.length);
+    const tmp2 = new Float32Array(this.data.length);
+
+    const boxH = (src: Float32Array | Uint8Array, dst: Float32Array) => {
+      const sums = new Float64Array(ch);
+      const n = 2 * r + 1;
+      for (let y = 0; y < height; y++) {
+        sums.fill(0);
+        for (let k = -r; k <= r; k++) {
+          const si = (y * width + Math.max(0, Math.min(width - 1, k))) * ch;
+          for (let c = 0; c < ch; c++) sums[c] += src[si + c];
+        }
+        for (let x = 0; x < width; x++) {
+          const di = (y * width + x) * ch;
+          for (let c = 0; c < ch; c++) dst[di + c] = sums[c] / n;
+          const leave = (y * width + Math.max(0, x - r))          * ch;
+          const enter = (y * width + Math.min(width - 1, x + r + 1)) * ch;
+          for (let c = 0; c < ch; c++) sums[c] += src[enter + c] - src[leave + c];
+        }
+      }
+    };
+
+    const boxV = (src: Float32Array, dst: Float32Array) => {
+      const sums = new Float64Array(ch);
+      const n = 2 * r + 1;
+      for (let x = 0; x < width; x++) {
+        sums.fill(0);
+        for (let k = -r; k <= r; k++) {
+          const si = (Math.max(0, Math.min(height - 1, k)) * width + x) * ch;
+          for (let c = 0; c < ch; c++) sums[c] += src[si + c];
+        }
+        for (let y = 0; y < height; y++) {
+          const di = (y * width + x) * ch;
+          for (let c = 0; c < ch; c++) dst[di + c] = sums[c] / n;
+          const leave = (Math.max(0, y - r)               * width + x) * ch;
+          const enter = (Math.min(height - 1, y + r + 1)  * width + x) * ch;
+          for (let c = 0; c < ch; c++) sums[c] += src[enter + c] - src[leave + c];
+        }
+      }
+    };
+
+    // 3 box-blur passes ≈ Gaussian; alternate between tmp/tmp2 so src ≠ dst
+    boxH(this.data, tmp);  boxV(tmp, tmp2);
+    boxH(tmp2, tmp);       boxV(tmp, tmp2);
+    boxH(tmp2, tmp);       boxV(tmp, tmp2);
+
+    for (let i = 0; i < this.data.length; i++) this.data[i] = tmp2[i];
+    return this;
+  }
+
+  // Hexagonal bokeh blur — three sequential 1D line-segment blurs at 0°/60°/-60°.
+  // The Minkowski sum of three equal line segments at those angles is a regular hexagon,
+  // so the resulting convolution kernel has a hexagonal aperture shape.
+  //
+  // The horizontal pass uses a sliding window (O(w×h)). The diagonal passes use
+  // precomputed offset tables to avoid Math.round/max/min in the hot loop, plus an
+  // interior fast-path that skips clamping for the ~90% of pixels away from the edges.
+  defocus(radius: number): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const r = Math.max(1, Math.round(radius));
+    const ch = 3;
+    const n = 2 * r + 1;
+    const tmp  = new Float32Array(this.data.length);
+    const tmp2 = new Float32Array(this.data.length);
+
+    const boxH = (src: Float32Array | Uint8Array, dst: Float32Array) => {
+      for (let y = 0; y < height; y++) {
+        let s0 = 0, s1 = 0, s2 = 0;
+        for (let k = -r; k <= r; k++) {
+          const si = (y * width + Math.max(0, Math.min(width - 1, k))) * ch;
+          s0 += src[si]; s1 += src[si + 1]; s2 += src[si + 2];
+        }
+        for (let x = 0; x < width; x++) {
+          const di = (y * width + x) * ch;
+          dst[di] = s0 / n; dst[di + 1] = s1 / n; dst[di + 2] = s2 / n;
+          const leave = (y * width + Math.max(0, x - r))           * ch;
+          const enter = (y * width + Math.min(width - 1, x + r + 1)) * ch;
+          s0 += src[enter] - src[leave];
+          s1 += src[enter + 1] - src[leave + 1];
+          s2 += src[enter + 2] - src[leave + 2];
+        }
+      }
+    };
+
+    const lineBlur = (src: Float32Array | Uint8Array, dst: Float32Array, dxf: number, dyf: number) => {
+      const dxOff = new Int32Array(n), dyOff = new Int32Array(n);
+      for (let k = -r; k <= r; k++) { dxOff[k + r] = Math.round(k * dxf); dyOff[k + r] = Math.round(k * dyf); }
+      const bx = Math.abs(dxOff[0]), by = Math.abs(dyOff[0]); // border half-widths
+      for (let y = 0; y < height; y++) {
+        const interior_y = y >= by && y < height - by;
+        for (let x = 0; x < width; x++) {
+          let s0 = 0, s1 = 0, s2 = 0;
+          if (interior_y && x >= bx && x < width - bx) {
+            for (let k = 0; k < n; k++) {
+              const si = ((y + dyOff[k]) * width + (x + dxOff[k])) * ch;
+              s0 += src[si]; s1 += src[si + 1]; s2 += src[si + 2];
+            }
+          } else {
+            for (let k = 0; k < n; k++) {
+              const si = (Math.max(0, Math.min(height - 1, y + dyOff[k])) * width +
+                          Math.max(0, Math.min(width  - 1, x + dxOff[k]))) * ch;
+              s0 += src[si]; s1 += src[si + 1]; s2 += src[si + 2];
+            }
+          }
+          const di = (y * width + x) * ch;
+          dst[di] = s0 / n; dst[di + 1] = s1 / n; dst[di + 2] = s2 / n;
+        }
+      }
+    };
+
+    const s3 = Math.sqrt(3);
+    boxH(this.data, tmp);                // 0°
+    lineBlur(tmp,  tmp2, 0.5,  s3 / 2); // 60°
+    lineBlur(tmp2, tmp,  0.5, -s3 / 2); // −60°
+
+    for (let i = 0; i < this.data.length; i++) this.data[i] = clamp8(tmp[i]);
+    return this;
+  }
+
+  // Average NxN pixel blocks into flat squares.
+  pixelate(size: number): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    size = Math.max(1, Math.round(size));
+    for (let by = 0; by < height; by += size) {
+      for (let bx = 0; bx < width; bx += size) {
+        const bw = Math.min(size, width - bx), bh = Math.min(size, height - by);
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let y = by; y < by + bh; y++) {
+          for (let x = bx; x < bx + bw; x++) {
+            const i = (y * width + x) * 3;
+            r += this.data[i]; g += this.data[i + 1]; b += this.data[i + 2]; n++;
+          }
+        }
+        r = (r / n) | 0; g = (g / n) | 0; b = (b / n) | 0;
+        for (let y = by; y < by + bh; y++) {
+          for (let x = bx; x < bx + bw; x++) {
+            const i = (y * width + x) * 3;
+            this.data[i] = r; this.data[i + 1] = g; this.data[i + 2] = b;
+          }
+        }
+      }
+    }
+    return this;
+  }
+
+  // Remap to polar coordinates: x→angle, y→radius. Samples from the original image.
+  // Flip the image vertically (reverse row order in place).
+  flip(): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const stride = width * 3;
+    const row = new Uint8Array(stride);
+    for (let y = 0; y < Math.floor(height / 2); y++) {
+      const top = y * stride, bot = (height - 1 - y) * stride;
+      row.set(this.data.subarray(top, top + stride));
+      this.data.copyWithin(top, bot, bot + stride);
+      this.data.set(row, bot);
+    }
+    return this;
+  }
+
+  // Mirror the image horizontally (reverse pixel order within each row).
+  mirror(): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const px = new Uint8Array(3);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < Math.floor(width / 2); x++) {
+        const l = (y * width + x) * 3, r = (y * width + (width - 1 - x)) * 3;
+        px.set(this.data.subarray(l, l + 3));
+        this.data.copyWithin(l, r, r + 3);
+        this.data.set(px, r);
+      }
+    }
+    return this;
+  }
+
+  polar(): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const src = new Uint8Array(this.data);
+    const cx = width / 2, cy = height / 2;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const theta = (x / width) * 2 * Math.PI;
+        const r = y / height;
+        const sx = Math.round(cx + r * cx * Math.cos(theta));
+        const sy = Math.round(cy + r * cy * Math.sin(theta));
+        const di = (y * width + x) * 3;
+        if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
+          const si = (sy * width + sx) * 3;
+          this.data[di] = src[si]; this.data[di + 1] = src[si + 1]; this.data[di + 2] = src[si + 2];
+        } else {
+          this.data[di] = this.data[di + 1] = this.data[di + 2] = 0;
+        }
+      }
+    }
+    return this;
+  }
+
+  // Use R channel to displace X, G channel to displace Y. Wraps toroidally.
+  displace(amount: Percentage): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const src = new Uint8Array(this.data);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 3;
+        const dx = Math.round((src[i]     / 127.5 - 1) * amount / 100 * width);
+        const dy = Math.round((src[i + 1] / 127.5 - 1) * amount / 100 * height);
+        const sx = ((x + dx) % width  + width)  % width;
+        const sy = ((y + dy) % height + height) % height;
+        const si = (sy * width + sx) * 3;
+        this.data[i] = src[si]; this.data[i + 1] = src[si + 1]; this.data[i + 2] = src[si + 2];
+      }
+    }
+    return this;
+  }
+
+  // Screen-composite n scaled copies of the image (zoom tunnel effect).
+  // Screen blend: out = a + b - a*b/255 — brightens without blowing out.
+  tunnel(n: number, zoom: number, decay: number, angle = 0, offsetX = 0, offsetY = 0): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const src = new Uint8Array(this.data);
+    const cx = width / 2 + offsetX / 100 * width;
+    const cy = height / 2 + offsetY / 100 * height;
+    const rad = angle * Math.PI / 180;
+    for (let pass = 1; pass <= n; pass++) {
+      const s = Math.pow(zoom, pass);
+      const alpha = Math.pow(decay, pass);
+      const cos = Math.cos(rad * pass), sin = Math.sin(rad * pass);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const dx = (x - cx) / s, dy = (y - cy) / s;
+          const sx = Math.round(dx * cos + dy * sin + cx);
+          const sy = Math.round(-dx * sin + dy * cos + cy);
+          if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
+            const si = (sy * width + sx) * 3, di = (y * width + x) * 3;
+            for (let c = 0; c < 3; c++) {
+              const a = this.data[di + c], b = src[si + c] * alpha;
+              this.data[di + c] = clamp8(a + b - a * b / 255);
+            }
+          }
+        }
+      }
+    }
+    return this;
+  }
+
+  // Darken pixels toward the edges with a radial gradient.
+  // strength: how dark the corners get (0=no effect, 1=black corners).
+  // softness: fraction of the diagonal that stays fully bright (0=darkens from centre, 0.9=only corners affected).
+  // The two params are fully decoupled: strength never touches the clear zone, softness never changes corner brightness.
+  // strength: how dark the outer edge gets (0=none, 3=black).
+  // softness: feathering — 0=hard edge at the ring, 1=gradient spans the whole image.
+  // size: where the dark ring sits, as a multiple of the corner distance (√2).
+  //   size=1 → ring at corners; size>1 → ring outside the image for a less circular look.
+  vignette(strength: number, softness = 0.7, size = 1): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const cx = width / 2, cy = height / 2;
+    const outer = size * Math.sqrt(2);
+    const inner = outer * (1 - softness);
+    const scale = outer - inner || 0.0001;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const dx = (x - cx) / cx, dy = (y - cy) / cy;
+        const r = Math.sqrt(dx * dx + dy * dy);
+        const t = Math.min(1, Math.max(0, (r - inner) / scale));
+        const smooth = t * t * (3 - 2 * t);
+        const factor = Math.max(0, 1 - strength * smooth);
+        const i = (y * width + x) * 3;
+        this.data[i]     = this.data[i]     * factor | 0;
+        this.data[i + 1] = this.data[i + 1] * factor | 0;
+        this.data[i + 2] = this.data[i + 2] * factor | 0;
+      }
+    }
+    return this;
+  }
+
+  // amount: 0–100 percentage of total pixels to swap.
   shuffle(amount: Percentage): this {
     const pixels = Math.floor(this.data.length / 3);
     const swaps = pct(amount, pixels);
@@ -339,13 +685,13 @@ export class GlitchBuffer implements IGlitchBuffer {
 
   // 8×8 Bayer threshold matrix, values 0–63.
   private static readonly BAYER8 = [
-    [ 0, 32,  8, 40,  2, 34, 10, 42],
+    [0, 32, 8, 40, 2, 34, 10, 42],
     [48, 16, 56, 24, 50, 18, 58, 26],
-    [12, 44,  4, 36, 14, 46,  6, 38],
+    [12, 44, 4, 36, 14, 46, 6, 38],
     [60, 28, 52, 20, 62, 30, 54, 22],
-    [ 3, 35, 11, 43,  1, 33,  9, 41],
+    [3, 35, 11, 43, 1, 33, 9, 41],
     [51, 19, 59, 27, 49, 17, 57, 25],
-    [15, 47,  7, 39, 13, 45,  5, 37],
+    [15, 47, 7, 39, 13, 45, 5, 37],
     [63, 31, 55, 23, 61, 29, 53, 21],
   ];
 
@@ -383,10 +729,10 @@ export class GlitchBuffer implements IGlitchBuffer {
           const quantized = clamp8(Math.round(buf[i] / step) * step);
           const err = buf[i] - quantized;
           buf[i] = quantized;
-          if (x + 1 < width)  buf[i + 1]         += err * 7 / 16;
+          if (x + 1 < width) buf[i + 1] += err * 7 / 16;
           if (y + 1 < height) {
-            if (x > 0)        buf[i + width - 1] += err * 3 / 16;
-                               buf[i + width]     += err * 5 / 16;
+            if (x > 0) buf[i + width - 1] += err * 3 / 16;
+            buf[i + width] += err * 5 / 16;
             if (x + 1 < width) buf[i + width + 1] += err * 1 / 16;
           }
         }
@@ -402,7 +748,7 @@ export class GlitchBuffer implements IGlitchBuffer {
 
   private sortRun(run: number[]): void {
     if (run.length < 2) return;
-    const px = run.map(i => ({ r: this.data[i * 3], g: this.data[i * 3 + 1], b: this.data[i * 3 + 2], l: this.lumaAt(i)}));
+    const px = run.map(i => ({ r: this.data[i * 3], g: this.data[i * 3 + 1], b: this.data[i * 3 + 2], l: this.lumaAt(i) }));
     px.sort((a, b) => a.l - b.l);
     for (let k = 0; k < run.length; k++) {
       this.data[run[k] * 3] = px[k].r;
@@ -451,6 +797,42 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
+  gamma(g: number): this {
+    const lut = new Uint8Array(256);
+    for (let v = 0; v < 256; v++) lut[v] = 255 * Math.pow(v / 255, g);
+    for (let i = 0; i < this.data.length; i++) this.data[i] = lut[this.data[i]];
+    return this;
+  }
+
+  levels(black: number, white: number): this {
+    const range = white - black || 1;
+    for (let i = 0; i < this.data.length; i++)
+      this.data[i] = Math.max(0, Math.min(255, (this.data[i] - black) / range * 255));
+    return this;
+  }
+
+  // Randomly flip individual bits with probability prob (0–1).
+  // Uses geometric skip: samples distance to next flip, so rand() is called once per flip
+  // rather than once per bit — ~1/prob times fewer calls for sparse probabilities.
+  bitrot(prob: number): this {
+    const logQ = Math.log(1 - prob);
+    let bit = Math.floor(Math.log(this.rand()) / logQ);
+    while (bit < this.data.length * 8) {
+      this.data[bit >> 3] ^= 1 << (bit & 7);
+      bit += 1 + Math.floor(Math.log(this.rand()) / logQ);
+    }
+    return this;
+  }
+
+
+  // Nearest-neighbour 1D resample: hold each sample for `factor` bytes (downsample then repeat).
+  resample(factor: number): this {
+    factor = Math.max(2, Math.round(factor));
+    for (let i = 0; i < this.data.length; i++)
+      this.data[i] = this.data[i - (i % factor)];
+    return this;
+  }
+
   // Downscale by factor, call fn, then upscale back to original dimensions.
   async scale(factor: number, fn: () => Promise<void>): Promise<this> {
     const origW = this.width, origH = this.height;
@@ -462,18 +844,21 @@ export class GlitchBuffer implements IGlitchBuffer {
   }
 
   // Extract luminance (Y from YCbCr), apply fn, then recompose with original chroma.
+  // The sub-buffer is 3-channel (R=G=B=Y) so all effects work on it normally.
   async luma(fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
     const count = Math.floor(this.data.length / 3);
-    const Y = new Uint8Array(count), Cb = new Uint8Array(count), Cr = new Uint8Array(count);
+    const Cb = new Uint8Array(count), Cr = new Uint8Array(count);
+    const rgb = new Uint8Array(count * 3);
     for (let i = 0; i < count; i++) {
       const r = this.data[i * 3], g = this.data[i * 3 + 1], b = this.data[i * 3 + 2];
-      Y[i]  = clamp8(0.299 * r + 0.587 * g + 0.114 * b);
+      const y = clamp8(0.299 * r + 0.587 * g + 0.114 * b);
       Cb[i] = clamp8(128 - 0.168736 * r - 0.331264 * g + 0.5 * b);
       Cr[i] = clamp8(128 + 0.5 * r - 0.418688 * g - 0.081312 * b);
+      rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = y;
     }
-    await fn(new GlitchBuffer(Y, this.width, this.height, this.rand));
+    await fn(new GlitchBuffer(rgb, this.width, this.height, this.rand));
     for (let i = 0; i < count; i++) {
-      const y = Y[i], cb = Cb[i] - 128, cr = Cr[i] - 128;
+      const y = rgb[i * 3], cb = Cb[i] - 128, cr = Cr[i] - 128;
       this.data[i * 3]     = clamp8(y + 1.402 * cr);
       this.data[i * 3 + 1] = clamp8(y - 0.344136 * cb - 0.714136 * cr);
       this.data[i * 3 + 2] = clamp8(y + 1.772 * cb);
@@ -515,15 +900,16 @@ export class GlitchBuffer implements IGlitchBuffer {
     return this;
   }
 
-  // Extract one RGB channel (0=R 1=G 2=B) into a contiguous sub-buffer,
-  // apply fn, then write back — same pattern as select.
+  // Extract one RGB channel into a 3-channel sub-buffer with R=G=B=channel value,
+  // apply fn, then write back channel 0. Using a proper 3-channel buffer means 2D
+  // effects (sort, transpose, blur, etc.) see valid stride-3 data and real dimensions.
   async channel(ch: number, fn: (sub: GlitchBuffer) => Promise<void>): Promise<this> {
     const count = Math.floor(this.data.length / 3);
-    const extracted = new Uint8Array(count);
-    for (let i = 0; i < count; i++) extracted[i] = this.data[i * 3 + ch];
-    const sub = new GlitchBuffer(extracted, 0, 0, this.rand);
+    const rgb = new Uint8Array(count * 3);
+    for (let i = 0; i < count; i++) rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = this.data[i * 3 + ch];
+    const sub = new GlitchBuffer(rgb, this.width, this.height, this.rand);
     await fn(sub);
-    for (let i = 0; i < count; i++) this.data[i * 3 + ch] = extracted[i];
+    for (let i = 0; i < count; i++) this.data[i * 3 + ch] = rgb[i * 3];
     return this;
   }
 

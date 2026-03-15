@@ -136,6 +136,15 @@ noise (randn -18 4)          ; noise amount clustered around -18 dB
 echo (randn 0.5 0.1) -12     ; delay clustered around 0.5
 ```
 
+### `randint max`, `randint min max`
+
+seeded random integer. `(randint max)` returns 0–max-1; `(randint min max)` returns min–max-1. useful anywhere an integer is required — channel selection, quantize steps, pixelate sizes, etc.
+
+```
+chromashift (randint 3) (randn 4 2) 0   ; random channel each run
+quantize (randint 2 6)                  ; 2–5 quantize levels
+```
+
 ### channel constants
 
 `R` = 0, `G` = 1, `B` = 2. use with `channel` and `transpose`.

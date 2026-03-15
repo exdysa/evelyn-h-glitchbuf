@@ -66,6 +66,12 @@ export const OPS: OpDef[] = [
   },
 
   {
+    name: 'maxsize', desc: 'cap the longest dimension — scales down if needed, no-ops on smaller images.', kind: OpKind.image, params: [
+      { name: 'px', type: ParamType.int, min: 64, max: 4096, default: 1024, step: 1, unit: 'px', desc: 'maximum pixels for the longest dimension' },
+    ], invoke: (buf, px) => buf.maxsize(px)
+  },
+
+  {
     name: 'stutter', desc: 'randomly repeat small buffer chunks in place — cd-skip / buffer freeze effect.', kind: OpKind.buffer, params: [
       { name: 'size', type: ParamType.log, min: 0.01, max: 50, default: 2, unit: '%', desc: 'chunk size as % of buffer length; smaller = tighter repeats' },
       { name: 'count', type: ParamType.int, min: 1, max: 200, default: 20, step: 1, desc: 'number of stutters to apply; higher values cover more of the buffer' },
@@ -83,7 +89,7 @@ export const OPS: OpDef[] = [
   {
     name: 'tremolo', desc: 'oscillate amplitude over the buffer length.', kind: OpKind.audio, params: [
       { name: 'rate', type: ParamType.log, min: 1, max: 100000, default: 100, desc: 'number of LFO oscillations across the buffer' },
-      { name: 'depth', type: ParamType.float, min: 0, max: 1, default: 0.5, step: 0.01, desc: 'modulation depth (0 = no effect, 1 = full amplitude swing)' },
+      { name: 'depth', type: ParamType.float, min: -1, max: 1, default: 0.5, step: 0.01, desc: 'modulation depth; positive = troughs go black, negative = troughs go white' },
     ], invoke: (buf, r, d) => buf.tremolo(r, d)
   },
 
@@ -198,6 +204,95 @@ export const OPS: OpDef[] = [
       { name: 'dx', type: ParamType.float, min: -100, max: 100, default: 10, step: 0.1, unit: '%', desc: 'horizontal shift as % of image width (negative = left)' },
       { name: 'dy', type: ParamType.float, min: -100, max: 100, default: 10, step: 0.1, unit: '%', desc: 'vertical shift as % of image height (negative = up)' },
     ], invoke: (buf, ch, dx, dy) => buf.chromashift(ch, dx as Percentage, dy as Percentage)
+  },
+
+  {
+    name: 'blur', desc: 'gaussian blur.', kind: OpKind.image, params: [
+      { name: 'radius', type: ParamType.log, min: 1, max: 100, default: 3, step: 1, unit: 'px', desc: 'blur radius in pixels' },
+    ], invoke: (buf, r) => buf.blur(r)
+  },
+
+  {
+    name: 'defocus', desc: 'hexagonal bokeh blur — simulates a camera lens with a hexagonal aperture.', kind: OpKind.image, params: [
+      { name: 'radius', type: ParamType.log, min: 1, max: 100, default: 8, step: 1, unit: 'px', desc: 'blur radius in pixels' },
+    ], invoke: (buf, r) => buf.defocus(r)
+  },
+
+  {
+    name: 'warp', desc: 'barrel (amount>0) or pincushion (amount<0) lens distortion.', kind: OpKind.image, params: [
+      { name: 'amount', type: ParamType.float, min: -1, max: 1, default: 0.3, step: 0.01, desc: 'distortion strength; positive = barrel (CRT), negative = pincushion' },
+    ], invoke: (buf, a) => buf.warp(a)
+  },
+
+  {
+    name: 'pixelate', desc: 'average NxN pixel blocks into flat squares.', kind: OpKind.image, params: [
+      { name: 'size', type: ParamType.int, min: 2, max: 256, default: 8, step: 1, unit: 'px', desc: 'block size in pixels; larger values produce a coarser mosaic' },
+    ], invoke: (buf, s) => buf.pixelate(s)
+  },
+
+  {
+    name: 'polar', desc: 'remap to polar coordinates — x becomes angle, y becomes radius.', kind: OpKind.image, params: [],
+    invoke: (buf) => buf.polar()
+  },
+
+  {
+    name: 'flip', desc: 'flip the image vertically (reverse row order).', kind: OpKind.image, params: [],
+    invoke: (buf) => buf.flip()
+  },
+
+  {
+    name: 'mirror', desc: 'mirror the image horizontally (reverse pixel order within each row).', kind: OpKind.image, params: [],
+    invoke: (buf) => buf.mirror()
+  },
+
+  {
+    name: 'displace', desc: 'use R channel to displace X, G channel to displace Y — self-referential warp.', kind: OpKind.image, params: [
+      { name: 'amount', type: ParamType.float, min: 0, max: 100, default: 10, step: 0.5, unit: '%', desc: 'max displacement as % of image dimensions' },
+    ], invoke: (buf, a) => buf.displace(a as Percentage)
+  },
+
+  {
+    name: 'tunnel', desc: 'additively composite n zoomed copies — zoom tunnel effect.', kind: OpKind.image, params: [
+      { name: 'n', type: ParamType.int, min: 1, max: 16, default: 6, step: 1, desc: 'number of zoom layers to composite' },
+      { name: 'zoom', type: ParamType.float, min: 0.5, max: 0.99, default: 0.8, step: 0.01, desc: 'scale factor per layer; lower = tighter tunnel' },
+      { name: 'decay', type: ParamType.float, min: 0.1, max: 0.95, default: 0.5, step: 0.01, desc: 'brightness decay per layer; lower = dimmer inner rings' },
+      { name: 'angle', type: ParamType.float, min: -180, max: 180, default: 0, step: 0.5, unit: '°', desc: 'rotation per layer in degrees; creates a spiral tunnel effect', optional: true },
+      { name: 'offsetX', type: ParamType.float, min: -50, max: 50, default: 0, step: 0.5, unit: '%', desc: 'horizontal offset of the vanishing point as % of image width', optional: true },
+      { name: 'offsetY', type: ParamType.float, min: -50, max: 50, default: 0, step: 0.5, unit: '%', desc: 'vertical offset of the vanishing point as % of image height', optional: true },
+    ], invoke: (buf, n, z, d, a, ox, oy) => buf.tunnel(n, z, d, a, ox, oy)
+  },
+
+  {
+    name: 'vignette', desc: 'darken pixels toward the edges with a radial gradient.', kind: OpKind.image, params: [
+      { name: 'strength', type: ParamType.float, min: 0, max: 1, default: 0.8, step: 0.05, desc: 'how dark the outer edge gets (0=no effect, 1=black)' },
+      { name: 'softness', type: ParamType.float, min: 0, max: 2, default: 0.7, step: 0.05, desc: 'width of the transition band (0=hard edge at the ring, 1=gradient spans the whole image)', optional: true },
+      { name: 'size', type: ParamType.float, min: 0.5, max: 4, default: 1, step: 0.1, desc: 'where the dark ring sits as a multiple of the corner distance; >1 pushes it outside the image for a less circular look', optional: true },
+    ], invoke: (buf, s, f, z) => buf.vignette(s, f, z)
+  },
+
+  {
+    name: 'bitrot', desc: 'randomly flip individual bits — organic corruption at the bit level.', kind: OpKind.byte, params: [
+      { name: 'prob', type: ParamType.log, min: 0.0001, max: 0.5, default: 0.01, desc: 'per-bit flip probability; 0.01 = ~1% of bits, 0.5 = ~half (full noise)' },
+    ], invoke: (buf, p) => buf.bitrot(p)
+  },
+
+  {
+    name: 'resample', desc: 'nearest-neighbour 1D downsample — each byte held for N samples, creating blocky aliasing.', kind: OpKind.buffer, params: [
+      { name: 'factor', type: ParamType.int, min: 2, max: 256, default: 8, step: 1, desc: 'hold length in bytes; larger values produce coarser, blockier artifacts' },
+    ], invoke: (buf, f) => buf.resample(f)
+  },
+
+  {
+    name: 'levels', desc: 'remap input range [black, white] to 0–255.', kind: OpKind.byte, params: [
+      { name: 'black', type: ParamType.int, min: 0, max: 254, default: 0, step: 1, desc: 'input black point (0–254); bytes at or below this map to 0' },
+      { name: 'white', type: ParamType.int, min: 1, max: 255, default: 255, step: 1, desc: 'input white point (1–255); bytes at or above this map to 255' },
+    ], invoke: (buf, b, w) => buf.levels(b, w)
+  },
+
+  {
+    name: 'gamma', desc: 'power-curve each byte. g<1 brightens, g>1 darkens.', kind: OpKind.byte, params: [
+      { name: 'g', type: ParamType.log, min: 0.1, max: 10, default: 1, desc: 'gamma exponent; <1 brightens, >1 darkens, 1 = passthrough' },
+    ], invoke: (buf, g) => buf.gamma(g)
   },
 
   {

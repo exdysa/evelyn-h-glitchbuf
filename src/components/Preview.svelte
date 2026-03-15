@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { mulberry32, parse, runGlitchsp } from '../glitchsp';
   import { GlitchBuffer, rgbaToGlitch, glitchToRgba } from '../effects';
   import { b64encode } from '../utils';
@@ -60,6 +60,13 @@
     updateUrl();
     if (!originalBuffer) return;
     loading = true;
+    // tick() flushes svelte's pending DOM writes so the loading overlay is actually in the DOM.
+    // then we need to wait for the browser to paint it — rAF fires at the *start* of a frame
+    // (before painting), so a single rAF isn't enough. the double-rAF pattern works because
+    // the first rAF queues a paint, and the second fires only after that paint has completed.
+    // without this, the main thread gets locked by the render work before the overlay ever shows.
+    await tick();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     try {
       const seedNum = parseInt(seed, 10) >>> 0;
       const rand = mulberry32(seedNum);
