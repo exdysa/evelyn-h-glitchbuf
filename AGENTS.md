@@ -68,11 +68,10 @@ AGENTS.md                           — this file
 npm run dev     # vite dev server with hot reload
 npm run build   # svelte-check + vite build → dist/
 npm run preview # serve dist/ locally
-npm run format  # prettier --write src
 npm run lint    # eslint src
 ```
 
-always run `npm run format && npm run lint && npm run build` together when verifying changes. vite bundles everything via `@sveltejs/vite-plugin-svelte`. open `dist/index.html` directly or use `npm run preview`.
+always run `npm run lint && npm run build` together when verifying changes. vite bundles everything via `@sveltejs/vite-plugin-svelte`. open `dist/index.html` directly or use `npm run preview`.
 
 ## adding a new op
 

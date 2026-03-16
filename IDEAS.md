@@ -28,6 +28,7 @@ totally out there
   - scramble function - randomizes the current script layers
   - for wrapped effects, add a `...` button after the effect that lets you add another effect wrapped in a `do` block. this would make it easier to have chains of effects in a wrapped block, which is often desireable.
   - auto warning/help when rendering is slow that lets the user easily insert a rescale to make the image smaller
+  - autoformat on block blur? nothing too fancy, just spaces, multiline do block, and maybe something for let / fn defs too
 
 ## todo
   - feedback form (and perhaps donation page? if i wanna be bold)
