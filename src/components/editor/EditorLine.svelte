@@ -353,6 +353,13 @@
     outline: none;
   }
 
+  /* zero-width space gives the empty contenteditable a first formatted line,
+     so align-items: baseline has a real baseline to anchor to instead of
+     falling back to the block-end margin edge and jumping the cursor up */
+  .line-edit::before {
+    content: '\200B';
+  }
+
   .editor-line :global(.wrap-btn) {
     opacity: 0.3;
   }

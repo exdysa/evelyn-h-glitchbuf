@@ -237,8 +237,8 @@ export class GlitchBuffer implements IGlitchBuffer {
     const srcBuffer = new AudioBuffer({ numberOfChannels: 1, length: len, sampleRate });
     srcBuffer.copyToChannel(samples, 0);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rendered = await Offline(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ({ transport }: any) => {
         const fx = buildFx().toDestination();
         const player = new Player(new ToneAudioBuffer(srcBuffer));

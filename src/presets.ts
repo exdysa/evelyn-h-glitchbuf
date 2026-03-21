@@ -261,6 +261,16 @@ luma (do
 )
 `,
   },
+  {
+    name: 'lava lamp',
+    code: `\
+maxsize 1024
+defocus 40
+xor 64
+saturate 2
+bandpass 1200 0.1
+`,
+  },
 ];
 export function loadUserPresets(): Preset[] {
   try {

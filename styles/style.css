@@ -20,6 +20,10 @@
   box-sizing: border-box;
 }
 
+a {
+  color: var(--accent);
+}
+
 html,
 body {
   margin: 0;
@@ -79,6 +83,11 @@ select {
   color: var(--fg);
   font-family: var(--font);
   font-size: var(--font-size);
+}
+
+/* browsers ignore line-height on <select>, so force the height to match inputs */
+select {
+  height: calc(1.4em + 10px);
 }
 
 button {

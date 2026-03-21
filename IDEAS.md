@@ -29,6 +29,7 @@ totally out there
   - for wrapped effects, add a `...` button after the effect that lets you add another effect wrapped in a `do` block. this would make it easier to have chains of effects in a wrapped block, which is often desireable.
   - auto warning/help when rendering is slow that lets the user easily insert a rescale to make the image smaller
   - autoformat on block blur? nothing too fancy, just spaces, multiline do block, and maybe something for let / fn defs too
+  - share button to copy the url with effect
 
 ## todo
   - feedback form (and perhaps donation page? if i wanna be bold)
@@ -38,8 +39,8 @@ totally out there
     - and perhaps add ctrl-z shortcut to editor that uses browser history
   - hover tooltips on params in code editor
   - tile effects editor at the bottom of editor rather than modal (keep as modal for mobile?)
-  - split copy pasted code into blocks if needed
-  - color param type with radio buttons
+  - show color layer param as radio buttons
+  - move saved presets above default ones
 
 ## bugs
 
@@ -49,3 +50,6 @@ totally out there
   - on desktop, have load image / download png buttons underneath preview in the right pane
   - on mobile, perhaps, have them in a modal when long-pressing the preview (too hidden though probs)
  - mobile interaction with effect is too hard. perhaps add a lil button next to a line that shows a modal with _all_ the effects contained in that line?
+ - mobile bugs:
+   - comment button is broken
+   - cant open effect dialog

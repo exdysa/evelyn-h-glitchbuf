@@ -32,6 +32,7 @@
     "vite": "^7.3.1"
   },
   "dependencies": {
+    "marked": "^17.0.4",
     "png-chunk-text": "^1.0.0",
     "png-chunks-encode": "^1.0.0",
     "png-chunks-extract": "^1.0.0",
