@@ -1,180 +1,173 @@
-# glitchsp language reference
+# glitchbuf — language reference
 
-glitchsp is a small Lisp that operates on the image's raw byte buffer (RGB, left-to-right, top-to-bottom). there is no explicit buffer argument — every effect implicitly targets the current buffer.
+glitchsp is the scripting language built into glitchbuf. a script is a list of effects applied to your image one after another, top to bottom. you don't need to know anything about programming to get started — just write effect names and numbers.
+
+## getting started
+
+the simplest scripts are just an effect name followed by its values:
+
+```
+noise -20
+bitcrush 4
+reverse
+```
+
+that applies three effects in sequence. see [EFFECTS.md](EFFECTS.md) for everything available.
 
 ## syntax
 
-**bare lines** — a line that doesn't start with `(` is an implicit call:
+**one effect per line** is the most common style:
 
 ```
 noise -20
 bitcrush 4
 ```
 
-**parenthesized forms** — use `(op args...)` for nesting:
+**parentheses for nesting** — use `(op args...)` when you want to pass the result of one thing into another, or to use wrappers:
 
 ```
-(echo (* 5 (rand)) -6)
+echo (* 5 (rand)) -6
+(select 0 50 (invert))
 ```
 
-both forms can be mixed freely. multi-line expressions are supported; parentheses are balanced across lines before evaluating.
+both styles can be mixed freely. expressions can span multiple lines as long as parentheses balance.
 
-**comments** — `#` starts a line comment:
-
-```
-# this is a comment
-noise -20  # inline comment
-```
-
-## special forms
-
-these are evaluated lazily — their bodies are not evaluated until the form needs them.
-
-### `select start end body`
-
-apply `body` to the byte sub-slice `[start, end)` where `start` and `end` are 0–100 percentages of the buffer.
+**comments** — `#` makes the rest of the line a comment (ignored by the interpreter):
 
 ```
-select 0 50 (invert)
-select 20 80 (do
-  (noise -20)
-  (bitcrush 4))
+# this does nothing
+noise -20  # heavy noise
 ```
 
-### `repeat n body`
+## wrappers
 
-evaluate `body` n times in sequence.
+wrappers apply an inner effect to a subset of the image or modify how it's applied. they all take the form `(wrapper params... body)` where `body` is the effect (or group of effects) you want to wrap.
 
-```
-repeat 3 (echo 5 -12)
-```
-
-### `channel ch body`
-
-apply `body` to a single RGB channel. `ch` is 0 (R), 1 (G), or 2 (B) — use the `R`, `G`, `B` constants.
+see [EFFECTS.md](EFFECTS.md) for a full reference on each wrapper.
 
 ```
-channel R (invert)
-channel B (bitcrush 3)
+(select 0 50 (invert))          ; invert just the first half
+(repeat 3 (echo 5 -12))         ; echo three times
+(mix 0.5 (bitcrush 2))          ; 50% crushed, 50% original
+(channel R (invert))            ; invert only the red channel
 ```
 
-### `stride size skip body`
+### do form ...
 
-apply `body` to chunks of `size` percent, skipping `skip` chunks between each application. useful for banded effects.
-
-```
-stride 10 1 (invert)   # invert every other 10% band
-```
-
-### `mix wet body`
-
-evaluate `body`, then blend its result with the pre-body snapshot at ratio `wet` (0–1).
+group multiple effects inside a wrapper:
 
 ```
-mix 0.5 (bitcrush 2)   # 50% blend of bitcrushed with original
-```
-
-### `do form ...`
-
-evaluate forms in sequence, return the last value. useful for grouping multiple ops.
-
-```
-select 30 70 (do
+(select 30 70 (do
   (reverb 0.8 5000)
-  (noise -30))
+  (noise -30)))
 ```
 
-### `let [sym val ...] body?`
+## randomness
 
-without a body, binds names into the current environment — they stay accessible for all subsequent top-level forms. with a body, creates a local scope and evaluates `body` inside it. multiple bindings are allowed in both forms.
+### rand, rand max, rand min max
 
-```
-# top-level definition — crunch is available afterwards
-let [crunch (fn [] (do (bitcrush 4) (noise -30)))]
-select 0 50 (crunch)
-select 60 90 (crunch)
+returns a random number. `(rand)` gives 0–1; `(rand max)` gives 0–max; `(rand min max)` gives a value in that range.
 
-# scoped — x is only visible inside the echo call
-let [x 10 g -6] (echo x g)
-```
-
-### `fn [params...] body`
-
-create a function that closes over the current environment.
-
-```
-let [crunch (fn [] (do (bitcrush 4) (noise -30)))]
-select 0 50 (crunch)
-select 60 90 (crunch)
-```
-
-### `if cond then else?`
-
-conditional. `else` branch is optional (returns null if omitted and condition is false).
-
-```
-if (> (rand) 0.5) (bitcrush 4) (noise -20)
-```
-
-## language builtins
-
-### `rand`, `rand max`, `rand min max`
-
-seeded random number. `(rand)` returns 0–1; `(rand max)` returns 0–max; `(rand min max)` returns min–max. uses the seed from the seed field — same seed always gives the same sequence.
+randomness is seeded — the same seed always produces the same result. click **randomise** in the app to try variations.
 
 ```
 noise (* -10 (rand 3))
 if (> (rand) 0.5) (invert) (reverse)
 ```
 
-### `randn`, `randn std`, `randn mean std`
+### randn, randn std, randn mean std
 
-normally distributed random number (gaussian) via box-muller. `(randn)` returns N(0,1); `(randn std)` returns N(0,std); `(randn mean std)` returns N(mean,std). uses the same seeded prng as `rand`.
-
-```
-noise (randn -18 4)          ; noise amount clustered around -18 dB
-echo (randn 0.5 0.1) -12     ; delay clustered around 0.5
-```
-
-### channel constants
-
-`R` = 0, `G` = 1, `B` = 2. use with `channel` and `transpose`.
+random number from a bell-curve (normal) distribution. `(randn)` is centred at 0 with standard deviation 1. provide a standard deviation and optional mean to control spread and centre.
 
 ```
-channel G (bitcrush 3)
-transpose R 10 5
+noise (randn -18 4)     ; noise amount usually near -18 dB
 ```
 
-### arithmetic
+### randint max, randint min max
 
-`+ - * / mod` — standard numeric operations.
-
-```
-echo (* 3 (rand 10)) (- 0 6)
-```
-
-### comparison
-
-`< > <= >= =` — return true/false.
+random whole number. `(randint max)` gives 0 up to max-1; `(randint min max)` gives min up to max-1.
 
 ```
+quantize (randint 2 6)  ; random quantize level between 2 and 5
+```
+
+## variables and functions
+
+### let [name value ...] body?
+
+bind a name to a value. with a body, the binding is local to it; without one, the name stays available for everything that follows.
+
+```
+let [x 10] (echo x -6)   ; x only exists inside the echo call
+
+let [x 10]                ; x is available to subsequent lines
+echo x -6
+```
+
+multiple bindings can go in the same `let`:
+
+```
+let [x 10  g -6] (echo x g)
+```
+
+### letfn name [params] body
+
+shorthand for defining a named function. call it later with `(name args...)`.
+
+```
+letfn crunch [] (do (bitcrush 4) (noise -30))
+(select 0 50 (crunch))
+(select 60 90 (crunch))
+```
+
+functions can also take parameters:
+
+```
+letfn loud [db] (noise db)
+(loud -6)
+```
+
+### fn [params...] body
+
+create an anonymous function — usually paired with `let`:
+
+```
+let [crunch (fn [] (do (bitcrush 4) (noise -30)))]
+(select 0 50 (crunch))
+```
+
+### if cond then else?
+
+run `then` if `cond` is true, `else` otherwise (`else` is optional):
+
+```
+if (> (rand) 0.5) (bitcrush 4) (noise -20)
+```
+
+## arithmetic and comparisons
+
+`+ - * / mod` — standard math. `< > <= >= =` — comparisons. `not` — negates a boolean.
+
+```
+echo (* 3 (rand 10)) -6
 if (>= (rand) 0.8) (bitcrush 2)
-```
-
-### logic
-
-`not` — negates a boolean.
-
-```
 if (not (> (rand) 0.5)) (invert)
 ```
 
-### `clamp v lo hi`
+### clamp v lo hi
 
-clamp a number to the range `[lo, hi]`.
+clamp a number to the range `[lo, hi]`:
 
 ```
 noise (clamp (* -5 (rand 8)) -40 -6)
+```
+
+## channel constants
+
+`R` = 0, `G` = 1, `B` = 2 — use wherever a channel index is expected:
+
+```
+(channel G (bitcrush 3))
 ```
 
 ## examples
@@ -186,13 +179,13 @@ bitcrush 3
 reverse
 
 # banded distortion with wet mix
-mix 0.6 (do
-  (select 0 50 (distort 8))
-  (select 50 100 (reverb 0.9 3000)))
+(mix 0.6 (do
+  (select 0 50 (overdrive 8))
+  (select 50 100 (reverb 0.9 3000))))
 
-# channel-split shift
-transpose R 5 0
-transpose B -5 0
+# channel-split colour shift
+(channel R (transpose (echo 5 -6)))
+(channel B (transpose (echo -5 -6)))
 
 # random effect each run
 if (> (rand) 0.5)
@@ -200,7 +193,7 @@ if (> (rand) 0.5)
   (shuffle 30)
 
 # reusable function applied to two regions
-let [crunch (fn [] (do (bitcrush 4) (noise -30)))]
-select 0 50 (crunch)
-select 60 90 (crunch)
+letfn crunch [] (do (bitcrush 4) (noise -30))
+(select 0 50 (crunch))
+(select 60 90 (crunch))
 ```

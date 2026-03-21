@@ -8,10 +8,10 @@ Try it out at https://ev00.net/glitchbuf or run it yourself locally.
 
 ```sh
 npm install
-npm run build   # or: npm run watch
+npm run build   # production build → dist/
 ```
 
-Open `index.html` directly in a browser (`file://` URL, no server needed).
+Open `dist/index.html` in a browser, or use `npm run preview` to serve it locally.
 
 ## Documentation
 

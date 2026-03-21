@@ -1,0 +1,180 @@
+:root {
+  --sp: 16px;
+  --bg: #1e1e1e;
+  --bg-input: #252525;
+  --fg: #d0d0d0;
+  --fg-dim: #888;
+  --accent: #a8cce8;
+  --border: #3c3c3c;
+  --btn-bg: #2a2a2a;
+  --btn-hover: #333;
+  --error: #ff7070;
+  --font: 'Fira Mono', ui-monospace, monospace;
+  --font-size: 13px;
+  --label-size: 11px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--accent);
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  font-family: var(--font);
+  font-size: var(--font-size);
+  background: var(--bg);
+  color: var(--fg);
+  padding: var(--sp);
+  gap: var(--sp);
+}
+
+#controls {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: var(--sp);
+  overflow-y: auto;
+  min-width: 0;
+  padding-inline: 1px;
+}
+
+/* ── shared element styles ─────────────────────────────────────────────── */
+
+input,
+button,
+textarea {
+  font-family: var(--font);
+  font-size: var(--font-size);
+  color: var(--fg);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  margin: 4px;
+}
+
+/* single-line inputs, selects, and buttons share height */
+input[type="text"],
+input[type="number"],
+select,
+button {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  line-height: 1.4;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  background: var(--bg-input);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: var(--font-size);
+}
+
+/* browsers ignore line-height on <select>, so force the height to match inputs */
+select {
+  height: calc(1.4em + 10px);
+}
+
+button {
+  background: var(--btn-bg);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--btn-hover);
+}
+
+:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* file selector */
+input[type="file"] {
+  color: var(--fg-dim);
+}
+
+input[type="file"]::file-selector-button {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--btn-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  line-height: 1.4;
+  text-transform: lowercase;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--btn-hover);
+}
+
+/* ── focus ──────────────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 1px solid var(--fg);
+}
+
+/* ── layout pieces ─────────────────────────────────────────────────────── */
+
+.file-seed-row {
+  display: flex;
+  gap: var(--sp);
+  min-width: 0;
+}
+
+.file-seed-row> :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+
+
+@media (max-width: 768px) {
+  body {
+    flex-direction: column;
+    height: auto;
+  }
+
+  #controls {
+    grid-template-columns: 1fr;
+    overflow-y: visible;
+  }
+
+}
+
+@media (max-width: 480px) {
+  .file-seed-row {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+

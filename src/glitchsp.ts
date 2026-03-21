@@ -1,12 +1,13 @@
-/// <reference path="ops.ts" />
+import type { IGlitchBuffer, Percentage, Wet } from './effects';
+import { OPS } from './ops';
 
 // ── PRNG ───────────────────────────────────────────────────────────────────
 // Mulberry32 — fast, good quality, fully seedable 32-bit PRNG.
 
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
-    s = (s + 0x6D2B79F5) >>> 0;
+    s = (s + 0x6d2b79f5) >>> 0;
     let t = Math.imul(s ^ (s >>> 15), 1 | s);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -15,18 +16,21 @@ function mulberry32(seed: number): () => number {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type GlitchFn = (...args: GlitchVal[]) => GlitchVal | Promise<GlitchVal>;
-type GlitchVal = number | string | boolean | null | GlitchVal[] | IGlitchBuffer | GlitchFn;
-type BufCell = { val: IGlitchBuffer };
+export type GlitchFn = (...args: GlitchVal[]) => GlitchVal | Promise<GlitchVal>;
+export type GlitchVal = number | string | boolean | null | GlitchVal[] | IGlitchBuffer | GlitchFn;
+export type BufCell = { val: IGlitchBuffer };
 
 // ── Source-spanning parse tree ─────────────────────────────────────────────
 // ParseNode carries character spans relative to the source string it was
 // parsed from. Used by the editor for arg extraction and reconstruction;
 // the evaluator continues to use GlitchVal via parseNodeToGlitchVal.
 
-interface Span { start: number; end: number; }
+interface Span {
+  start: number;
+  end: number;
+}
 
-type ParseNode =
+export type ParseNode =
   | { kind: 'atom'; raw: string; value: GlitchVal; span: Span }
   | { kind: 'list'; children: ParseNode[]; span: Span; bare?: boolean };
 
@@ -35,9 +39,19 @@ function tokenizePos(src: string): Array<{ text: string; start: number; end: num
   const out: Array<{ text: string; start: number; end: number }> = [];
   let i = 0;
   while (i < src.length) {
-    if (/\s/.test(src[i])) { i++; continue; }
-    if (src[i] === '#') { while (i < src.length && src[i] !== '\n') i++; continue; }
-    if ('()[]'.includes(src[i])) { out.push({ text: src[i], start: i, end: i + 1 }); i++; continue; }
+    if (/\s/.test(src[i])) {
+      i++;
+      continue;
+    }
+    if (src[i] === '#') {
+      while (i < src.length && src[i] !== '\n') i++;
+      continue;
+    }
+    if ('()[]'.includes(src[i])) {
+      out.push({ text: src[i], start: i, end: i + 1 });
+      i++;
+      continue;
+    }
     const s = i;
     while (i < src.length && !/[\s()[\]#]/.test(src[i])) i++;
     if (i > s) out.push({ text: src.slice(s, i), start: s, end: i });
@@ -57,15 +71,21 @@ function _parseNode(toks: Array<{ text: string; start: number; end: number }>): 
     return { kind: 'list', children, span: { start: tok.start, end: end.end } };
   }
   if (tok.text === ')' || tok.text === ']') throw new Error(`Unexpected ${tok.text}`);
-  return { kind: 'atom', raw: tok.text, value: parseAtom(tok.text), span: { start: tok.start, end: tok.end } };
+  return {
+    kind: 'atom',
+    raw: tok.text,
+    value: parseAtom(tok.text),
+    span: { start: tok.start, end: tok.end },
+  };
 }
 
 // Parse a single block string into a ParseNode. Bare forms (no outer parens)
 // are wrapped in a synthetic list so callers always get a list with the op
 // name as children[0] and args as children[1..].
-function parseBlock(src: string): ParseNode {
+export function parseBlock(src: string): ParseNode {
   const toks = tokenizePos(src);
-  if (!toks.length) return { kind: 'list', children: [], span: { start: 0, end: src.length }, bare: true };
+  if (!toks.length)
+    return { kind: 'list', children: [], span: { start: 0, end: src.length }, bare: true };
   if (toks[0].text === '(' || toks[0].text === '[') return _parseNode(toks);
   const children: ParseNode[] = [];
   while (toks.length) children.push(_parseNode(toks));
@@ -83,7 +103,7 @@ function parseNodeToGlitchVal(node: ParseNode): GlitchVal {
 // the next token at depth 0.
 // Bare single-token forms like `invert` become [invert] lists, which evaluate
 // as zero-arg calls — so bare ops work without any special-casing in evaluate().
-function parse(src: string): ParseNode[] {
+export function parse(src: string): ParseNode[] {
   const result: ParseNode[] = [];
   const toks = tokenizePos(src);
   while (toks.length > 0) {
@@ -101,7 +121,12 @@ function parse(src: string): ParseNode[] {
         lastEnd = children[children.length - 1].span.end;
       }
       if (children.length > 0)
-        result.push({ kind: 'list', bare: true, children, span: { start: children[0].span.start, end: lastEnd } });
+        result.push({
+          kind: 'list',
+          bare: true,
+          children,
+          span: { start: children[0].span.start, end: lastEnd },
+        });
     }
   }
   return result;
@@ -121,11 +146,13 @@ function parseAtom(token: string): GlitchVal {
 
 // ── Environment ────────────────────────────────────────────────────────────
 
-class GlitchEnv {
+export class GlitchEnv {
   private map = new Map<string, GlitchVal>();
-  constructor(private parent?: GlitchEnv) { }
+  private computed = new Map<string, () => GlitchVal>();
+  constructor(private parent?: GlitchEnv) {}
 
   get(name: string): GlitchVal {
+    if (this.computed.has(name)) return this.computed.get(name)!();
     if (this.map.has(name)) return this.map.get(name)!;
     if (this.parent) return this.parent.get(name);
     throw new Error(`Undefined: ${name}`);
@@ -134,11 +161,15 @@ class GlitchEnv {
   set(name: string, val: GlitchVal): void {
     this.map.set(name, val);
   }
+
+  setComputed(name: string, fn: () => GlitchVal): void {
+    this.computed.set(name, fn);
+  }
 }
 
 // ── Evaluator ──────────────────────────────────────────────────────────────
 
-async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<GlitchVal> {
+export async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<GlitchVal> {
   if (typeof expr === 'number' || typeof expr === 'boolean' || expr === null) return expr;
   if (typeof expr === 'function') return expr;
   if (typeof expr === 'string') return env.get(expr);
@@ -171,10 +202,27 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
     };
   }
 
+  if (head === 'letfn') {
+    // (letfn name [params] body scope?) — shorthand for (let [name (fn [params] body)] scope?)
+    const name = rest[0] as string;
+    const params = rest[1] as string[];
+    const body = rest[2];
+    const closure = env;
+    const fn = (...args: GlitchVal[]): Promise<GlitchVal> => {
+      const inner = new GlitchEnv(closure);
+      params.forEach((p, i) => inner.set(p, args[i]));
+      return evaluate(body, inner, buf);
+    };
+    const hasScope = rest[3] !== undefined;
+    const target = hasScope ? new GlitchEnv(env) : env;
+    target.set(name, fn);
+    return hasScope ? evaluate(rest[3], target, buf) : null;
+  }
+
   if (head === 'select') {
     // (select startPct endPct body) — body evaluated lazily with buf.val = sub
-    const start = await evaluate(rest[0], env, buf) as Percentage;
-    const end = await evaluate(rest[1], env, buf) as Percentage;
+    const start = (await evaluate(rest[0], env, buf)) as Percentage;
+    const end = (await evaluate(rest[1], env, buf)) as Percentage;
     const body = rest[2];
     const saved = buf.val;
     await buf.val.select(start, end, async (sub) => {
@@ -187,7 +235,7 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 
   if (head === 'repeat') {
     // (repeat n body) — evaluate body n times in sequence
-    const n = Math.floor(await evaluate(rest[0], env, buf) as number);
+    const n = Math.floor((await evaluate(rest[0], env, buf)) as number);
     const body = rest[1];
     for (let i = 0; i < n; i++) await evaluate(body, env, buf);
     return buf.val;
@@ -195,7 +243,7 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 
   if (head === 'channel') {
     // (channel ch body) — apply body to a single RGB channel (r=0 g=1 b=2)
-    const ch = Math.floor(await evaluate(rest[0], env, buf) as number) % 3;
+    const ch = Math.floor((await evaluate(rest[0], env, buf)) as number) % 3;
     const body = rest[1];
     const top = buf.val;
     await top.channel(ch, async (sub) => {
@@ -206,29 +254,69 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
     return buf.val;
   }
 
+  if (head === 'transpose') {
+    // (transpose body) — flip grid so ops apply top-bottom instead of left-right, then flip back
+    const body = rest[0];
+    const top = buf.val;
+    await top.transpose(async (sub) => {
+      buf.val = sub as IGlitchBuffer;
+      await evaluate(body, env, buf);
+    });
+    buf.val = top;
+    return buf.val;
+  }
+
   if (head === 'stride') {
     // (stride len skip body) — apply body to chunks of len (0–100), skipping skip chunks between each
-    const chunkLen = Math.max(0.1, await evaluate(rest[0], env, buf) as number);
-    const skip = Math.max(0, Math.floor(await evaluate(rest[1], env, buf) as number));
+    const chunkLen = Math.max(0.001, (await evaluate(rest[0], env, buf)) as number);
+    const skip = Math.max(0, Math.floor((await evaluate(rest[1], env, buf)) as number));
     const body = rest[2];
     const top = buf.val;
     const step = chunkLen * (skip + 1);
     for (let pos = 0; pos < 100; pos += step) {
       buf.val = top;
-      await top.select(pos as Percentage, Math.min(pos + chunkLen, 100) as Percentage, async (sub) => {
-        buf.val = sub as IGlitchBuffer;
-        await evaluate(body, env, buf);
-      });
+      await top.select(
+        pos as Percentage,
+        Math.min(pos + chunkLen, 100) as Percentage,
+        async (sub) => {
+          buf.val = sub as IGlitchBuffer;
+          await evaluate(body, env, buf);
+        }
+      );
     }
+    buf.val = top;
+    return buf.val;
+  }
+
+  if (head === 'scale') {
+    // (scale factor body) — downscale, apply body, upscale back
+    const factor = (await evaluate(rest[0], env, buf)) as number;
+    const body = rest[1];
+    await buf.val.scale(factor, async () => {
+      await evaluate(body, env, buf);
+    });
+    return buf.val;
+  }
+
+  if (head === 'luma') {
+    // (luma body) — apply body to luminance only, preserving chroma
+    const body = rest[0];
+    const top = buf.val;
+    await top.luma(async (sub) => {
+      buf.val = sub as IGlitchBuffer;
+      await evaluate(body, env, buf);
+    });
     buf.val = top;
     return buf.val;
   }
 
   if (head === 'mix') {
     // (mix wet body) — evaluate body, blend result with pre-body snapshot at wet ratio
-    const wet = await evaluate(rest[0], env, buf) as Wet;
+    const wet = (await evaluate(rest[0], env, buf)) as Wet;
     const body = rest[1];
-    await buf.val.mix(wet, async () => { await evaluate(body, env, buf); });
+    await buf.val.mix(wet, async () => {
+      await evaluate(body, env, buf);
+    });
     return buf.val;
   }
 
@@ -248,8 +336,8 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 
   // ── function application ─────────────────────────────────────────────────
 
-  const fn = await evaluate(head, env, buf) as GlitchFn;
-  const args = await Promise.all(rest.map(a => evaluate(a, env, buf)));
+  const fn = (await evaluate(head, env, buf)) as GlitchFn;
+  const args = await Promise.all(rest.map((a) => evaluate(a, env, buf)));
   return await fn(...args);
 }
 
@@ -257,7 +345,7 @@ async function evaluate(expr: GlitchVal, env: GlitchEnv, buf: BufCell): Promise<
 // Buffer ops close over `buf` — they never take a buffer argument.
 // select is a special form above, not a function.
 
-function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
+export function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   const env = new GlitchEnv();
 
   // Register all buffer ops from OPS (those with an invoke function)
@@ -268,8 +356,14 @@ function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
     }
   }
 
+  // buffer dimensions — read dynamically so they reflect the current sub-buffer
+  env.setComputed('width', () => buf.val.width);
+  env.setComputed('height', () => buf.val.height);
+
   // channel constants
-  env.set('R', 0); env.set('G', 1); env.set('B', 2);
+  env.set('R', 0);
+  env.set('G', 1);
+  env.set('B', 2);
 
   // arithmetic
   env.set('+', (a: GlitchVal, b: GlitchVal) => (a as number) + (b as number));
@@ -278,7 +372,8 @@ function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   env.set('/', (a: GlitchVal, b: GlitchVal) => (a as number) / (b as number));
   env.set('mod', (a: GlitchVal, b: GlitchVal) => (a as number) % (b as number));
   env.set('clamp', (v: GlitchVal, lo: GlitchVal, hi: GlitchVal) =>
-    Math.min(Math.max(v as number, lo as number), hi as number));
+    Math.min(Math.max(v as number, lo as number), hi as number)
+  );
 
   // comparison & logic
   env.set('<', (a: GlitchVal, b: GlitchVal) => (a as number) < (b as number));
@@ -292,16 +387,29 @@ function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
   // (rand) → 0–1, (rand max) → 0–max, (rand min max) → min–max
   env.set('rand', (...args: GlitchVal[]): GlitchVal => {
     if (args.length >= 2) {
-      const min = args[0] as number, max = args[1] as number;
+      const min = args[0] as number,
+        max = args[1] as number;
       return min + rand() * (max - min);
     }
     return args.length === 1 ? rand() * (args[0] as number) : rand();
   });
 
+  // integer random — same signature as rand but floors to integer
+  // (randint max) → 0–max-1, (randint min max) → min–max-1
+  env.set('randint', (...args: GlitchVal[]): GlitchVal => {
+    if (args.length >= 2) {
+      const min = args[0] as number,
+        max = args[1] as number;
+      return Math.floor(min + rand() * (max - min));
+    }
+    return Math.floor(rand() * (args[0] as number));
+  });
+
   // normal distribution via Box-Muller — uses seeded PRNG
   // (randn) → N(0,1), (randn std) → N(0,std), (randn mean std) → N(mean,std)
   env.set('randn', (...args: GlitchVal[]): GlitchVal => {
-    const u = rand(), v = rand();
+    const u = rand(),
+      v = rand();
     const n = Math.sqrt(-2 * Math.log(u === 0 ? 1e-10 : u)) * Math.cos(2 * Math.PI * v);
     if (args.length >= 2) return (args[0] as number) + n * (args[1] as number);
     return args.length === 1 ? n * (args[0] as number) : n;
@@ -314,7 +422,7 @@ function makeGlitchEnv(buf: BufCell, rand: () => number): GlitchEnv {
 // Split raw source into top-level block strings, preserving comments (unlike
 // parse()). Used by the editor to split source into draggable rows.
 
-function splitIntoBlocks(src: string): string[] {
+export function splitIntoBlocks(src: string): string[] {
   const rawLines = src.split('\n');
   const blocks: string[] = [];
   let currentLines: string[] = [];
@@ -338,8 +446,11 @@ function splitIntoBlocks(src: string): string[] {
 
 // ── Entry point ────────────────────────────────────────────────────────────
 
-
-async function runGlitchsp(code: string, image: IGlitchBuffer, rand: () => number): Promise<void> {
+export async function runGlitchsp(
+  code: string,
+  image: IGlitchBuffer,
+  rand: () => number
+): Promise<void> {
   const buf: BufCell = { val: image };
   const env = makeGlitchEnv(buf, rand);
   for (const node of parse(code)) await evaluate(parseNodeToGlitchVal(node), env, buf);

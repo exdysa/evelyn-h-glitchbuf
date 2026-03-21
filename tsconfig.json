@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
     "target": "es2020",
-    "module": "none",
-    "outFile": "dist/glitchbuf.js",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["es2020", "dom"],
     "strict": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "skipLibCheck": true
   },
-  "include": ["src/main.ts"]
+  "include": ["src/**/*.ts", "vite.config.ts"]
 }

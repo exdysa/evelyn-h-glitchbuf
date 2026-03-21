@@ -1,199 +1,105 @@
-# glitchbuf effects reference
+# glitchbuf — effects reference
 
-all effects are available as glitchsp ops.
-
----
-
-## audio effects
-
-these treat pixel bytes as audio samples (mapped to -1..1), apply the effect, then map back.
-
-### `bitcrush bits`
-
-`bits` — bit depth (1–8)
-
-quantises each byte to 2^n discrete levels by zeroing the lower bits. low values (1–3) produce harsh banding; higher values are subtler.
-
-### `noise db`
-
-`db` — amplitude in decibels (e.g. -30 = subtle, -6 = heavy)
-
-adds gaussian noise scaled by the given amplitude. seeded — same seed gives identical noise pattern.
-
-### `echo delay gain`
-
-`delay` — delay length (0–100, percent of buffer length)
-`gain` — echo amplitude in dB (negative = quieter)
-
-single echo: copies the signal forward by `delay` and mixes it in at `gain` dB. stacking multiple `echo` calls produces multi-tap effects.
-
-### `reverb size dampening`
-
-`size` — room size (0–1)
-`dampening` — high-frequency damping (Hz)
-
-Freeverb plate reverb. smears bytes across the buffer with a spatialised tail. Freeverb is a deterministic algorithm — output is fully reproducible given the same parameters. use `mix` to blend with the original.
-
-### `tremolo rate depth`
-
-`rate` — number of LFO oscillations across the buffer
-`depth` — modulation depth (0–1; 0 = no effect, 1 = full swing)
-
-sinusoidal amplitude modulation. creates periodic bright/dark banding patterns.
-
-### `distort drive`
-
-`drive` — saturation amount (~1 = clean, ~10 = heavy crunch)
-
-soft-clip via tanh. compresses extreme byte values and adds harmonic-like distortion to the pixel data.
-
-### `chorus rate depth`
-
-`rate` — LFO oscillation count
-`depth` — modulation width (0–100)
-
-replaces the signal with a time-shifted copy modulated by an LFO. produces wavy, doubled-image effects.
-
-### `pitchshift semitones`
-
-`semitones` — pitch shift amount (e.g. -12 to 12)
-
-time-preserving pitch shift via Tone.js. stretches or compresses frequency content without changing buffer length.
-
-### `phaser freq octaves base`
-
-`freq` — LFO rate in Hz
-`octaves` — sweep width in octaves
-`base` — center frequency in Hz
-
-all-pass filter cascade swept by an LFO. creates sweeping phase-cancellation patterns.
-
-### `freqshift freq`
-
-`freq` — shift amount in Hz (positive = up, negative = down)
-
-shifts all frequencies up or down by a fixed Hz amount. unlike pitchshift, this is not harmonic — it warps tonal relationships.
-
-### `vibrato freq depth`
-
-`freq` — LFO rate in Hz
-`depth` — modulation depth (0–1)
-
-LFO pitch wobble via delay modulation. produces wavy, unstable distortion across the image.
-
-### `chebyshev order`
-
-`order` — positive = odd harmonic orders (0→1, 1→3, 2→5…), negative = even (−1→2, −2→4…)
-
-chebyshev waveshaper — adds upper harmonics. odd orders are asymmetric and saturating; even orders are symmetric and more aliased. higher magnitude = more complex patterns.
-
-### `autowah base octave sensitivity`
-
-`base` — center frequency in Hz
-`octave` — sweep range in octaves
-`sensitivity` — envelope follower sensitivity in dB
-
-envelope-follower sweeps a bandpass filter based on signal amplitude. produces dynamic, reactive distortion.
-
-### `feedbackdelay delay feedback`
-
-`delay` — delay time (0–100, percent of buffer length)
-`feedback` — feedback amount (0–1)
-
-recirculating delay with feedback. builds up repeating echoes that accumulate across the buffer.
+all effects are available as glitchsp ops. click any effect badge in the editor to open its parameter dialog — each param has a description, a scrub slider, and (where applicable) a disable toggle.
 
 ---
 
-## byte effects & transforms
+## effect types
 
-operate directly on the raw byte stream.
+**byte effects** operate on individual byte values independently of their neighbours. they tend to produce harsh, mathematical-looking distortions: banding, clipping, value inversion. examples include `bitcrush`, `overdrive`, `gamma`, `quantize`, `fold`, `solarize`, `xor`.
 
-### `invert`
+**buffer effects** rearrange or modulate data across the buffer as a whole — treating the pixel stream as a raw sequence of bytes rather than a 2D image. good for glitchy repetitions, smearing, and noise. examples include `echo`, `reverse`, `copy`, `shuffle`, `stutter`, `resample`.
 
-no arguments.
+**image effects** work with 2D structure — pixels, rows, columns, spatial position. they can shift colours, blur regions, warp geometry, or manipulate pixel order. examples include `sort`, `chromashift`, `blur`, `warp`, `pixelate`, `flip`, `displace`, `vignette`, `jpeg`, `bayer`, `diffuse`.
 
-inverts every byte (`255 - x`). produces a photographic negative effect.
+**audio effects** treat the pixel buffer as an audio waveform and apply digital signal processing to it — reverb, chorus, pitch shifting, tremolo, and more. because the buffer is raw pixel data rather than audio, the results are unpredictable and often heavily glitched. examples include `reverb`, `chorus`, `pitchshift`, `tremolo`, `phaser`, `vibrato`, `chebyshev`.
 
-### `reverse`
-
-no arguments.
-
-reverses the entire byte stream. flips the image data end-to-end (not a mirror — RGB triples are split across the boundary).
-
-### `copy start end destination`
-
-`start` — source start (0–100)
-`end` — source end (0–100)
-`destination` — destination start (0–100)
-
-copies the byte slice `[start, end)` to `destination`, overwriting whatever is there. useful for duplicating regions or creating glitch repetitions.
-
-### `quantize n`
-
-`n` — number of discrete levels (any integer ≥ 2)
-
-quantises each byte to n evenly-spaced levels across 0–255. lower values produce more pronounced posterisation.
-
-### `fold drive`
-
-`drive` — fold amount (≤0.5 = passthrough, ~1 = one fold, higher = chaotic)
-
-wavefolder: reflects byte values back at the 0 and 255 boundaries. low drive is subtle; high drive creates recursive folding patterns.
-
-### `solarize threshold`
-
-`threshold` — inversion threshold (0–1 fraction of 255)
-
-inverts bytes above the threshold, leaving others unchanged. mimics the darkroom solarization technique.
-
-### `xor value`
-
-`value` — XOR mask (0–255)
-
-XORs every byte against the given value. `85` (01010101) and `170` (10101010) produce structured checkerboard-like bit patterns.
+**filter effects** apply biquad filters (lowpass, highpass, bandpass, etc.) to the pixel buffer, treating it as an audio signal. they attenuate or boost different "frequency" components of the byte stream, which translates to smooth gradients, loss of sharp transitions, or the opposite. examples include `lowpass`, `highpass`, `bandpass`, `lowshelf`, `highshelf`, `notch`.
 
 ---
 
-## pixel effects & transforms
+## wrappers
 
-operate on whole RGB pixels or 2D image structure.
+wrappers modify *how* an effect (or group of effects) is applied — targeting a region, a channel, or blending the result back in. they all take the form `(wrapper params... body)` in your script. use the **`()`** button in the editor to wrap an existing block without typing.
 
-### `sort threshold`
+### select start end body
 
-`threshold` — luma threshold (-100 to 100)
+apply `body` to only a portion of the pixel buffer. `start` and `end` are percentages (0–100) of the total buffer length.
 
-sorts pixels by luminance within each row. positive threshold: sorts runs of pixels brighter than `threshold`%. negative: sorts runs darker than `abs(threshold)`%. creates the classic pixel-sorting glitch look.
+since the buffer is raw RGB bytes laid out left-to-right, top-to-bottom, selecting 0–50 targets roughly the top half of the image, and so on — though channel interleaving means boundaries don't land exactly on pixel rows.
 
-### `sortvertical threshold`
+```
+(select 0 50 (invert))
+(select 20 80 (do
+  (noise -20)
+  (bitcrush 4)))
+```
 
-`threshold` — luma threshold (-100 to 100)
+### repeat n body
 
-same as `sort` but operates on columns instead of rows.
+run `body` n times in sequence. useful for intensifying subtle effects or building up accumulative damage.
 
-### `smear amount decay`
+```
+(repeat 4 (echo 5 -12))
+```
 
-`amount` — smear length (0–100, percent of pixel count)
-`decay` — how much the peak value persists (0 = no smear, 1 = hold forever)
+### mix wet body
 
-peak-follower smear: propagates the running maximum value forward with exponential decay, per channel. creates horizontal streaking/bleeding.
+run `body`, then blend its output back with the state before `body` ran. `wet` is 0 (fully original) to 1 (fully processed). values in between give a ghost-like overlay effect.
 
-### `shuffle amount`
+```
+(mix 0.3 (reverb 0.9 4000))  ; subtle reverb trail
+(mix 0.5 (bitcrush 2))       ; half-crushed
+```
 
-`amount` — fraction of pixels to swap (0–100)
+### channel ch body
 
-randomly swaps whole RGB pixels. seeded — same seed gives the same shuffle. higher values approach full randomisation.
+apply `body` to a single RGB channel, leaving the other two untouched. `ch` is 0 (R), 1 (G), or 2 (B) — use the constants `R`, `G`, `B`.
 
-### `transpose channel dx dy`
+great for colour-split effects and applying different amounts of distortion per channel.
 
-`channel` — channel to shift (`R`, `G`, or `B`)
-`dx` — horizontal shift (percent of image width; negative shifts left)
-`dy` — vertical shift (percent of image height; negative shifts up)
+```
+(channel R (invert))
+(channel B (bitcrush 3))
+(channel G (echo 8 -10))
+```
 
-shifts one colour channel by `dx`/`dy`, wrapping toroidally. displacing R, G, and B by different amounts creates chromatic aberration.
+### stride len skip body
 
-### `rescale width height` / `resize width height`
+apply `body` to evenly-spaced chunks of the buffer. `len` is the chunk size as a percentage; `skip` is how many chunks to leave between each processed one.
 
-`width` — target width in pixels
-`height` — target height in pixels (optional — omit to preserve aspect ratio)
+`skip 0` processes every chunk. `skip 1` processes every other chunk (creating bands). higher skip values produce sparser patterns.
 
-resizes the image to `w × h`. the new dimensions become the working buffer for all subsequent ops.
+```
+(stride 10 1 (invert))    ; invert every other 10% band
+(stride 5 3 (bitcrush 2)) ; hit every 4th band
+```
+
+### scale factor body
+
+downscale the image, apply `body`, then upscale back to original size. lower values produce blockier, more pixelated results before the effect runs — the upscale step then re-interpolates and smears things back out.
+
+useful for lo-fi looks and making effects "chunkier".
+
+```
+(scale 0.25 (blur 3))
+(scale 0.1 (noise -6))
+```
+
+### luma body
+
+apply `body` to the luminance (brightness) channel only, leaving hue and saturation untouched. useful for effects that you want to affect perceived brightness without shifting colour.
+
+```
+(luma (bitcrush 3))
+(luma (fold 1.5))
+```
+
+### transpose body
+
+flip the pixel grid so that the buffer runs top-to-bottom rather than left-to-right, apply `body`, then flip back. any effect that operates on the buffer as a horizontal sequence will now operate on vertical columns instead.
+
+```
+(transpose (echo 5 -12))    ; vertical echo instead of horizontal
+(transpose (sort 80))        ; sort columns instead of rows
+```

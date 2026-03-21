@@ -17,7 +17,7 @@ glitchsp should feel like a natural fit for the domain: audio-inspired semantics
 
 ## style
 
-- no bundler, no framework, no build complexity. keep it openable as `file://`.
+- vite + svelte for the build, but keep complexity low. no unnecessary abstractions.
 - prefer simple and direct over clever. if something needs a long explanation, reconsider it.
 - don't add ops, features, or configurability speculatively. wait for a real need.
 - the DSL is minimal by design — resist the urge to kitchen-sink it.
@@ -26,28 +26,52 @@ glitchsp should feel like a natural fit for the domain: audio-inspired semantics
 ## file overview
 
 ```
-index.html          — markup; loads Tone.js CDN then glitchbuf.js (copied to dist/ on build)
-style.css           — dark-mode UI, CSS vars, split-pane grid, mobile layout (copied to dist/ on build)
-src/effects.ts      — IGlitchBuffer interface, GlitchBuffer class (all ops), rgbaToGlitch/glitchToRgba
-src/ops.ts          — OpDef/OPS/OP_MAP: name, desc, ParamDef[], invoke binding for every effect
-src/glitchsp.ts     — PRNG, tokenizer, parser, GlitchEnv, evaluate, makeGlitchEnv, runGlitchsp, splitIntoBlocks
-src/editor.ts       — renderEditor, drag-and-drop, effect modal, getScript/setScript/initEditor
-src/main.ts         — DOM wiring, runImage, fitCanvas, event listeners (UI only)
-dist/               — build output: glitchbuf.js + copies of index.html and style.css
-README.md           — project intro, setup/build instructions, links to help docs
-HELP.md             — user guide: loading images, seed, run/new buttons, editor shortcuts
-GLITCHSP.md         — glitchsp language reference: syntax, special forms, builtins, examples
-EFFECTS.md          — effects reference: all ops with parameters and descriptions
-AGENTS.md           — this file
+index.html                          — Vite entry point; mounts App.svelte
+styles/style.css                    — dark-mode CSS vars, layout, responsive breakpoints
+src/App.svelte                      — root component; global state, context setup, layout
+src/effects.ts                      — IGlitchBuffer interface, GlitchBuffer class (all ops), rgbaToGlitch/glitchToRgba
+src/ops.ts                          — OpDef/OPS/OP_MAP: name, desc, ParamDef[], invoke binding for every effect
+src/glitchsp.ts                     — PRNG, tokenizer, parser, GlitchEnv, evaluate, makeGlitchEnv, runGlitchsp, splitIntoBlocks
+src/editor.ts                       — pure utility functions: tokenizeForDisplay, findExprBounds, findParamAtOffset,
+                                      selectionCharOffsets, setCaretOffset, getEditText, placeCaretAtEnd/AtPoint, sLog/sExp
+src/png-meta.ts                     — writePngMeta/readPngMeta: embed/extract seed, script, original image in PNG chunks
+src/context.ts                      — AppCtx Svelte context (state + methods shared across components)
+src/presets.ts                      — built-in preset gallery
+src/utils.ts                        — b64encode/b64decode helpers
+src/vite-env.d.ts                   — ambient module shims for png-chunks-* CJS packages
+src/components/Preview.svelte       — canvas rendering pipeline, runImage, fitCanvas, error display
+src/components/SeedRow.svelte       — seed input + randomize button
+src/components/FileInput.svelte     — image upload, PNG metadata extraction
+src/components/PresetsRow.svelte    — preset picker with save/load/delete
+src/components/base/                — Button, Dialog, Field, Prompt primitives
+src/components/dialogs/             — HelpDialog, SavePresetDialog, DeletePresetDialog, PresetConfirmDialog
+src/components/editor/Editor.svelte — top-level editor; owns lines[] state, drag, raw mode; exposes EditorApi via onready
+src/components/editor/EditorLine.svelte — single block row; display/edit toggle via editState enum, keyboard handling, drag handle, wrap/delete buttons
+src/components/editor/LineDisplay.svelte — tokenized read-only block view; number scrubbing, effect badge clicks
+src/components/editor/EffectModal.svelte — modal for adding/editing/wrapping effect expressions
+src/components/editor/ParamRow.svelte   — single parameter row within EffectModal
+src/components/editor/ParamSlider.svelte — scrub slider for numeric params
+src/components/editor/RandPanel.svelte  — randomize panel
+src/components/editor/param-math.ts    — param value math helpers
+src/components/editor/types.ts         — shared editor component types (EffectModalApi, etc.)
+dist/                               — build output (vite)
+README.md                           — project intro, setup/build instructions, links to help docs
+HELP.md                             — user guide: loading images, seed, run/new buttons, editor shortcuts
+GLITCHSP.md                         — glitchsp language reference: syntax, special forms, builtins, examples
+EFFECTS.md                          — effects reference: all ops with parameters and descriptions
+AGENTS.md                           — this file
 ```
 
 ## build
 
 ```sh
-npm run build   # tsc → dist/glitchbuf.js, then copies index.html + style.css to dist/
+npm run dev     # vite dev server with hot reload
+npm run build   # svelte-check + vite build → dist/
+npm run preview # serve dist/ locally
+npm run lint    # eslint src
 ```
 
-`module: none` + `outFile` — tsc concatenates in reference order: `effects.ts` → `ops.ts` → `glitchsp.ts` → `presets.ts` → `editor.ts` → `main.ts`. works as `file://`.
+always run `npm run lint && npm run build` together when verifying changes. vite bundles everything via `@sveltejs/vite-plugin-svelte`. open `dist/index.html` directly or use `npm run preview`.
 
 ## adding a new op
 
