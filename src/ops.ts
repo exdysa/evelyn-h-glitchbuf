@@ -755,6 +755,53 @@ export const OPS: OpDef[] = [
   },
 
   {
+    name: 'cpow',
+    desc: 'conformal complex power warp: samples from w^(r+i·j) + (x+y·j). fold stays at output centre; x/y shift which source point it wraps around.',
+    kind: OpKind.image,
+    params: [
+      {
+        name: 'r',
+        type: ParamType.float,
+        min: -4,
+        max: 4,
+        default: 2,
+        step: 0.05,
+        desc: 'real part of exponent — controls radial power/folding',
+      },
+      {
+        name: 'i',
+        type: ParamType.float,
+        min: -4,
+        max: 4,
+        default: 0,
+        step: 0.05,
+        desc: 'imaginary part of exponent — adds spiral rotation',
+      },
+      {
+        name: 'x',
+        type: ParamType.float,
+        min: -1,
+        max: 1,
+        default: 0,
+        step: 0.01,
+        optional: true,
+        desc: 'horizontal source offset — shifts which part of the input the warp centres on',
+      },
+      {
+        name: 'y',
+        type: ParamType.float,
+        min: -1,
+        max: 1,
+        default: 0,
+        step: 0.01,
+        optional: true,
+        desc: 'vertical source offset — shifts which part of the input the warp centres on',
+      },
+    ],
+    invoke: (buf, r, i, x, y) => buf.cpow(r, i, x, y),
+  },
+
+  {
     name: 'pixelate',
     desc: 'average NxN pixel blocks into flat squares.',
     kind: OpKind.image,

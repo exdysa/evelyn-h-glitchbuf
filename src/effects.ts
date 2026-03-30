@@ -78,6 +78,7 @@ export interface IGlitchBuffer {
   shuffle(amount: Percentage): this;
   chromashift(ch: number, dx: Percentage, dy: Percentage): this;
   warp(amount: number): this;
+  cpow(r: number, i: number, x?: number, y?: number): this;
   blur(radius: number): this;
   defocus(radius: number): this;
   pixelate(size: number): this;
@@ -402,6 +403,87 @@ export class GlitchBuffer implements IGlitchBuffer {
         } else {
           this.data[di] = this.data[di + 1] = this.data[di + 2] = 0;
         }
+      }
+    }
+    return this;
+  }
+
+  // Conformal complex warp. The image is treated as a complex plane: centre = 0,
+  // edges = ±1 (square assumed). For each output pixel at normalised coordinate w,
+  // the source pixel is looked up at:
+  //
+  //   src_coord = w^c + z    where c = r+i·j, z = x+y·j
+  //
+  // The fold/singularity stays at the output centre. x/y shift which point in
+  // the source image that centre maps to — the warp geometry is unchanged, it just
+  // samples around a different origin in the input.
+  // At x = y = 0 this is the plain complex power w^c.
+  cpow(r: number, i: number, x = 0, y = 0): this {
+    const { width, height } = this;
+    if (!width || !height) return this;
+    const src = new Uint8Array(this.data);
+    // rad maps between normalised complex coords and pixel coords
+    const rad = Math.min(width, height) / 2;
+    const cx = width / 2,
+      cy = height / 2;
+    for (let py = 0; py < height; py++) {
+      for (let px = 0; px < width; px++) {
+        const di = (py * width + px) * 3;
+
+        // normalise output pixel to complex plane w = wx + wy·j
+        const wx = (px - cx) / rad,
+          wy = (py - cy) / rad;
+
+        // principal-branch log of w: ln|w| + j·arg(w)
+        const mag = Math.sqrt(wx * wx + wy * wy);
+        if (mag === 0) {
+          // singularity at the output centre — fill black
+          this.data[di] = this.data[di + 1] = this.data[di + 2] = 0;
+          continue;
+        }
+        const logMag = Math.log(mag),
+          theta = Math.atan2(wy, wx);
+
+        // multiply ln(w) by c = r+i·j:
+        // (r+i·j)(logMag + theta·j) = (r·logMag − i·theta) + (i·logMag + r·theta)·j
+        const re = r * logMag - i * theta;
+        const im = i * logMag + r * theta;
+
+        // exp(re + im·j) = w^c in normalised space; add z to shift the source origin
+        const expRe = Math.exp(re);
+        const sxRaw = expRe * Math.cos(im) * rad + cx + x * rad;
+        const syRaw = expRe * Math.sin(im) * rad + cy + y * rad;
+
+        // bilinear sample with toroidal wrap.
+        // toroidal wrap — set to false to fill out-of-bounds with black instead
+        const wrap = true;
+        const x0 = Math.floor(sxRaw),
+          y0 = Math.floor(syRaw);
+        const tx = sxRaw - x0,
+          ty = syRaw - y0;
+        if (!wrap && (x0 < 0 || x0 + 1 >= width || y0 < 0 || y0 + 1 >= height)) {
+          this.data[di] = this.data[di + 1] = this.data[di + 2] = 0;
+          continue;
+        }
+        const wrapCoord = (n: number, len: number) => ((n % len) + len) % len;
+        const x1 = wrap ? wrapCoord(x0 + 1, width) : x0 + 1;
+        const y1 = wrap ? wrapCoord(y0 + 1, height) : y0 + 1;
+        const wx0 = wrap ? wrapCoord(x0, width) : x0;
+        const wy0 = wrap ? wrapCoord(y0, height) : y0;
+        const s00 = (wy0 * width + wx0) * 3,
+          s10 = (wy0 * width + x1) * 3;
+        const s01 = (y1 * width + wx0) * 3,
+          s11 = (y1 * width + x1) * 3;
+        const itx = 1 - tx,
+          ity = 1 - ty;
+        for (let c = 0; c < 3; c++)
+          this.data[di + c] =
+            (itx * ity * src[s00 + c] +
+              tx * ity * src[s10 + c] +
+              itx * ty * src[s01 + c] +
+              tx * ty * src[s11 + c] +
+              0.5) |
+            0;
       }
     }
     return this;
