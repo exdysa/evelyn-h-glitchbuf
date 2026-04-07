@@ -13,6 +13,7 @@ export interface AppCtx {
   runImage(immediate?: boolean): Promise<void>;
   showError(msg: string, immediate?: boolean): void;
   download(): Promise<void>;
+  share(): Promise<void>;
 }
 
 const KEY = Symbol('app');

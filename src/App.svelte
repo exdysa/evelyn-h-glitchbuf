@@ -62,6 +62,9 @@
       a.click();
       URL.revokeObjectURL(url);
     },
+    async share() {
+      await navigator.clipboard.writeText(location.href);
+    },
   };
 
   setAppContext(ctx);
@@ -109,6 +112,7 @@
   </Field>
   <div class="bottom-bar">
     <button type="button" onclick={() => openHelpDialog()}>help</button>
+    <button type="button" onclick={() => ctx.share()}>share</button>
     <button type="button" onclick={() => ctx.download()}>download png</button>
   </div>
   <Preview
