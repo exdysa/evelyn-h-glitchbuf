@@ -1,0 +1,23 @@
+[
+    [
+        {
+            "name": "noise",
+            "params": [
+                -18
+            ]
+        },
+        {
+            "name": "pixelate",
+            "params": [
+                8
+            ]
+        },
+        {
+            "name": "smear",
+            "params": [
+                0.15,
+                0.12
+            ]
+        }
+    ]
+]

@@ -3,10 +3,30 @@
     "target": "es2020",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["es2020", "dom"],
+    "esModuleInterop": true,
+    "lib": [
+      "es2020",
+      "dom"
+    ],
     "strict": true,
     "sourceMap": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": [
+        "node_modules/*"
+      ]
+    }
   },
-  "include": ["src/**/*.ts", "vite.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
