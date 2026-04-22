@@ -1,22 +1,41 @@
 [
     [
         {
-            "name": "noise",
+            "name": "maxsize",
             "params": [
-                -18
+                1024
             ]
         },
         {
-            "name": "pixelate",
+            "name": "saturate",
             "params": [
-                8
+                2
             ]
         },
         {
-            "name": "smear",
+            "name": "mix",
             "params": [
-                0.15,
-                0.12
+                0.3,
+                [
+                    {
+                        "name": "defocus",
+                        "params": [
+                            25
+                        ]
+                    }
+                ]
+            ]
+        },
+        {
+            "name": "channel",
+            "params": [
+                "R",
+                {
+                    "name": "gamma",
+                    "params": [
+                        0.8
+                    ]
+                }
             ]
         }
     ]
