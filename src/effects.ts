@@ -196,20 +196,45 @@ export class GlitchBuffer implements IGlitchBuffer {
     newWidth: number,
     newHeight = Math.round((newWidth * this.height) / this.width)
   ): Promise<this> {
-    const src = new OffscreenCanvas(this.width, this.height);
-    src
-      .getContext('2d')!
-      .putImageData(
-        new ImageData(glitchToRgba(this.data, this.width, this.height), this.width, this.height),
-        0,
-        0
-      );
+    const rgba = glitchToRgba(this.data, this.width, this.height);
+    const result = new Uint8ClampedArray(newWidth * newHeight * 4);
 
-    const dst = new OffscreenCanvas(newWidth, newHeight);
-    dst.getContext('2d')!.drawImage(src, 0, 0, newWidth, newHeight);
+    const xRatio = this.width / newWidth;
+    const yRatio = this.height / newHeight;
 
-    const dstData = dst.getContext('2d')!.getImageData(0, 0, newWidth, newHeight);
-    this.data = rgbaToGlitch(dstData.data, newWidth, newHeight);
+    for (let y = 0; y < newHeight; y++) {
+      for (let x = 0; x < newWidth; x++) {
+        const srcX = x * xRatio;
+        const srcY = y * yRatio;
+
+        const x0 = Math.floor(srcX);
+        const y0 = Math.floor(srcY);
+        const x1 = Math.min(x0 + 1, this.width - 1);
+        const y1 = Math.min(y0 + 1, this.height - 1);
+
+        const dx = srcX - x0;
+        const dy = srcY - y0;
+
+        const idx00 = (y0 * this.width + x0) * 4;
+        const idx10 = (y0 * this.width + x1) * 4;
+        const idx01 = (y1 * this.width + x0) * 4;
+        const idx11 = (y1 * this.width + x1) * 4;
+        const dstIdx = (y * newWidth + x) * 4;
+
+        for (let c = 0; c < 4; c++) {
+          const v00 = rgba[idx00 + c];
+          const v10 = rgba[idx10 + c];
+          const v01 = rgba[idx01 + c];
+          const v11 = rgba[idx11 + c];
+
+          const top = v00 * (1 - dx) + v10 * dx;
+          const bottom = v01 * (1 - dx) + v11 * dx;
+          result[dstIdx + c] = Math.round(top * (1 - dy) + bottom * dy);
+        }
+      }
+    }
+
+    this.data = rgbaToGlitch(result, newWidth, newHeight);
     this.width = newWidth;
     this.height = newHeight;
     return this;
